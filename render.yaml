@@ -1,0 +1,27 @@
+services:
+  - type: worker
+    name: emotional-video-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot_render.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8587955850:AAGCt_zaVbk073zf_Dhcbu9ogqsJk3Z5ZyE
+      - key: GOOGLE_PROJECT_ID
+        value: your-google-project-id
+      - key: GOOGLE_LOCATION
+        value: us-central1
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        value: |
+          {
+            "type": "service_account",
+            "project_id": "your-project-id",
+            "private_key_id": "your-private-key-id",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_ACTUAL_PRIVATE_KEY\n-----END PRIVATE KEY-----\n",
+            "client_email": "your-service-account@your-project.iam.gserviceaccount.com",
+            "client_id": "your-client-id",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs"
+          }
