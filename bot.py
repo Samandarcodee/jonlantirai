@@ -19,15 +19,20 @@ from google.cloud import vision
 # Load environment variables
 load_dotenv()
 
-# Create service-account.json if it doesn't exist (for Railway deployment)
-SERVICE_ACCOUNT_FILE = 'service-account.json'
-if not os.path.exists(SERVICE_ACCOUNT_FILE):
-    # Try to create from local file or show error
-    if os.path.exists('service-account.json'):
-        pass  # File exists
-    else:
-        print("⚠️  service-account.json not found!")
-        print("📝 Make sure service-account.json is in the same directory as bot.py")
+# Decode service-account.json from base64 environment variable (Railway deployment)
+SA_BASE64 = os.getenv('SERVICE_ACCOUNT_JSON_BASE64')
+if SA_BASE64:
+    try:
+        import base64
+        sa_json = base64.b64decode(SA_BASE64).decode('utf-8')
+        with open('service-account.json', 'w', encoding='utf-8') as f:
+            f.write(sa_json)
+        print("✅ service-account.json created from base64 environment variable")
+    except Exception as e:
+        print(f"❌ Error creating service-account.json: {e}")
+elif not os.path.exists('service-account.json'):
+    print("⚠️  service-account.json not found!")
+    print("📝 Set SERVICE_ACCOUNT_JSON_BASE64 environment variable or add service-account.json locally")
 
 # Configure logging
 logging.basicConfig(
