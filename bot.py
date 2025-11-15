@@ -19,16 +19,6 @@ from google.cloud import vision
 # Load environment variables
 load_dotenv()
 
-# Create service-account.json from environment variable (Railway deployment)
-SERVICE_ACCOUNT_JSON_CONTENT = os.getenv('SERVICE_ACCOUNT_JSON_CONTENT')
-if SERVICE_ACCOUNT_JSON_CONTENT:
-    try:
-        with open('service-account.json', 'w', encoding='utf-8') as f:
-            f.write(SERVICE_ACCOUNT_JSON_CONTENT)
-        print("✅ service-account.json created from environment variable")
-    except Exception as e:
-        print(f"❌ Error creating service-account.json: {e}")
-
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
