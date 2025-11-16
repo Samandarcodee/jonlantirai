@@ -1049,6 +1049,51 @@ COMEDY_PROMPTS = [
     }
 ]
 
+# ============================================================
+# 📊 BARCHA PROMPTS - ALL_PROMPTS (YANGI + ESKI)
+# ============================================================
+# Eski prompts + Yangi comedy prompts birgalikda random tanlash
+ALL_PROMPTS = COMEDY_PROMPTS + [
+    # ESKI EMOTSIONAL PROMPTS
+    {
+        "name": "💔 Sog'inch bilan Kulgi",
+        "prompt": "Make the person in the photo come to life. They slowly lift their head, blink softly, breathe in, and give a gentle, emotional smile as if missing someone deeply."
+    },
+    {
+        "name": "🎉 Quvonchli Uchrashuv",
+        "prompt": "Bring the people in the image to life — they notice each other, eyes widen with joy, one person steps closer, smiles broadly, and move into a warm hug."
+    },
+    {
+        "name": "💖 Sevimli Nigoh va Tabassum",
+        "prompt": "Animate both people so they move slightly closer, make eye contact, and share a tender smile. Their heads tilt a little, eyes sparkle."
+    },
+    {
+        "name": "😔 Chuqur Sog'inch",
+        "prompt": "Make the person slowly blink, lower their eyes for a second, then look up with a faint smile full of sadness and love."
+    },
+    {
+        "name": "😊 Quvnoq Salom",
+        "prompt": "Animate two people meeting happily. They wave at each other, smile brightly, take a step closer, and give a quick warm hug."
+    },
+    {
+        "name": "🌙 Yumshoq Xotira",
+        "prompt": "Bring the person to life with subtle movements — they close their eyes briefly, take a soft breath, then smile warmly."
+    },
+    {
+        "name": "🤣 Quvonchli Ajablanib va Kulgi",
+        "prompt": "Make the person react with joyful surprise — eyes widen, eyebrows raise, and a bright smile spreads."
+    },
+    {
+        "name": "😭 Uchrashuvning Ko'z Yoshlari",
+        "prompt": "Animate both people so they move closer, their eyes fill with tears, and they smile while hugging tightly."
+    }
+]
+
+# Random tanlash uchun helper function
+def get_random_prompt():
+    """Random prompt tanlash - YANGI + ESKI"""
+    return random.choice(ALL_PROMPTS)
+
 # 10 ta yangi emotsional promtlar (ZAHIRA sifatida saqlanadi)
 VIDEO_PROMPTS_BACKUP = [
     {
@@ -1521,13 +1566,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_bytes = analyzer.enhance_old_photo(image_bytes)
             logger.info(f"✨ Old photo enhanced for user {user.id}")
         
-        # COMEDY SHABLONI QO'SHMA QILISH - RANDOM SELECT
+        # COMEDY SHABLONI QO'SHMA QILISH - RANDOM SELECT (YANGI + ESKI)
         selected_template = context.user_data.get('selected_template', 'auto')
         
         if selected_template == 'comedy':
-            # Comedy shablonidan random prompt tanlash
-            selected_style = random.choice(COMEDY_PROMPTS)
-            logger.info(f"🎭 COMEDY MODE: User {user.id} - {selected_style['name']}")
+            # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
+            selected_style = get_random_prompt()
+            logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
         else:
             # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
             selected_style = analyzer.generate_uzbek_prompt(analysis)
@@ -1994,34 +2039,36 @@ async def template_trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def template_comedy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """🎭 COMEDY SHABLONI - Random kulgili video"""
+    """🎭 COMEDY SHABLONI - Random kulgili video (YANGI + ESKI)"""
     query = update.callback_query
     await query.answer()
     
     context.user_data['selected_template'] = 'comedy'
     
-    # Random prompt tanlash
-    comedy_prompt = random.choice(COMEDY_PROMPTS)
-    context.user_data['comedy_name'] = comedy_prompt['name']
-    context.user_data['comedy_prompt'] = comedy_prompt['prompt']
+    # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
+    selected_prompt = get_random_prompt()
+    context.user_data['comedy_name'] = selected_prompt['name']
+    context.user_data['comedy_prompt'] = selected_prompt['prompt']
     
     keyboard = [
         [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
-        [InlineKeyboardButton("🔄 Boshqa Comedik", callback_data="template_comedy")],
+        [InlineKeyboardButton("🔄 Boshqa Prompt", callback_data="template_comedy")],
         [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
     ]
     
-    prompt_list = "\n".join([f"• {p['name']}" for p in COMEDY_PROMPTS[:5]])
+    # ALL_PROMPTS'dan misol ko'rsatish
+    sample_prompts = "\n".join([f"• {p['name']}" for p in random.sample(ALL_PROMPTS, min(5, len(ALL_PROMPTS)))])
     
     await query.edit_message_text(
-        text="🎭 <b>COMEDY SHABLONI - RANDOM KULGILI VIDEO!</b>\n\n"
-             f"<b>Tanlangan:</b> {comedy_prompt['name']}\n\n"
+        text="🎭 <b>RANDOM PROMPT - YANGI + ESKI!</b>\n\n"
+             f"<b>Tanlangan:</b> {context.user_data.get('comedy_name', selected_prompt['name'])}\n\n"
              "Bu shablonda rasmingiz:\n"
-             "• Kulgili hayotlanadi!\n"
-             "• O'zga sho'x mulohaza qiladi\n"
-             "• Hazilga to'la video chiqadi\n\n"
-             "20 ta kulgili ko'rik mavjud! 🎉\n\n"
-             "Rasm yuboring yoki boshqa comedikni tanlang:",
+             "• Yangi hazil yoki eski emosyon!\n"
+             "• Random har klik!\n"
+             "• 28+ ta turli video ko'rik mavjud! 🎉\n\n"
+             "<b>Misol prompts:</b>\n"
+             f"{sample_prompts}\n\n"
+             "Rasm yuboring yoki boshqa promoptni tanlang:",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
