@@ -1966,8 +1966,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
         ],
         [
-            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats"),
-            InlineKeyboardButton("🗑️ O'chirish", callback_data="admin_delete_user")
+            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
         ]
     ]
     
@@ -1979,7 +1978,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 👥 ADMIN USERS LIST - FOYDALANUVCHILAR ROYHATI
 # ==========================================
 async def admin_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Barcha foydalanuvchilar ro'yxati"""
+    """Barcha foydalanuvchilar ro'yxati - pagination bilan"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     query = update.callback_query
     await query.answer()
     
@@ -1988,17 +1988,33 @@ async def admin_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Ruxsat yo'q!")
         return
     
+    # Limit: 20 ta user (Telegram message limit uchun)
+    MAX_USERS = 20
     users_list = ""
-    for i, (user_id, user_data) in enumerate(user_db.data.items(), 1):
-        username = user_data.get('username') or 'username_yoq'
+    total_users = len(user_db.data)
+    
+    for i, (user_id, user_data) in enumerate(list(user_db.data.items())[:MAX_USERS], 1):
+        username = user_data.get('username')
         first_name = user_data.get('first_name', 'Noma\'lum')
         videos = user_data.get('videos_created', 0)
         
-        users_list += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
+        if username:
+            users_list += f"{i}. {first_name} (@{username}) - {videos} video\n"
+        else:
+            users_list += f"{i}. {first_name} (ID: {user_id[:8]}...) - {videos} video\n"
+    
+    # Agar ko'proq user bo'lsa
+    if total_users > MAX_USERS:
+        users_list += f"\n... va yana {total_users - MAX_USERS} ta user"
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="admin_back")]
+    ]
     
     await query.edit_message_text(
-        text=f"👥 **BARCHA FOYDALANUVCHILAR ({len(user_db.data)} TA)**\n\n{users_list}",
-        parse_mode='Markdown'
+        text=f"👥 <b>BARCHA FOYDALANUVCHILAR ({total_users} TA)</b>\n\n{users_list}",
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
@@ -2031,6 +2047,7 @@ async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Batafsil statistika"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     query = update.callback_query
     await query.answer()
     
@@ -2049,7 +2066,75 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
         f"📈 O'rtacha: <b>{stats['total_videos'] // max(stats['total_users'], 1)}</b> video/user"
     )
     
-    await query.edit_message_text(detailed_stats, parse_mode='HTML')
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="admin_back")]
+    ]
+    
+    await query.edit_message_text(detailed_stats, parse_mode='HTML', reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panel'ga qaytish"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    # Statistikani olish
+    stats = user_db.get_all_stats()
+    
+    # Eng faol foydalanuvchilar
+    top_users = sorted(
+        user_db.data.items(),
+        key=lambda x: x[1].get('videos_created', 0),
+        reverse=True
+    )[:10]
+    
+    admin_text = (
+        "┏━━━━━━━━━━━━━━━━━┓\n"
+        "┃ 👑 **ADMIN** 👑 ┃\n"
+        "┗━━━━━━━━━━━━━━━━━┛\n\n"
+        
+        f"👥 Userlar: **{stats['total_users']}**\n"
+        f"🎬 Videolar: **{stats['total_videos']}**\n"
+        f"✅ Bugun: **{stats['active_today']}**\n\n"
+        
+        "🏆 **TOP 10:**\n"
+    )
+    
+    for i, (user_id, user_data) in enumerate(top_users, 1):
+        username = user_data.get('username') or 'username_yoq'
+        first_name = user_data.get('first_name', 'Noma\'lum')
+        videos = user_data.get('videos_created', 0)
+        
+        if username and username != 'username_yoq':
+            admin_text += f"{i}. {first_name} (@{username}) - {videos} video\n"
+        else:
+            admin_text += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
+    
+    admin_text += (
+        "\n━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    
+    # ADMIN MENYU TUGMALARI
+    keyboard = [
+        [
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
+            InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
+        ],
+        [
+            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
 
 
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2850,6 +2935,7 @@ def main():
         application.add_handler(CallbackQueryHandler(admin_users_list, pattern="^admin_users_list$"))
         application.add_handler(CallbackQueryHandler(admin_broadcast, pattern="^admin_broadcast$"))
         application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
+        application.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
         
         # Photo va text handlers
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
