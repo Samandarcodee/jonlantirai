@@ -2306,27 +2306,27 @@ async def category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Kategoriya tugmalari
     keyboard = [
         [
-            InlineKeyboardButton("😂 XO'RJAKK & HAZIL", callback_data="cat_funny"),
-            InlineKeyboardButton("👴 ESKI KUNLAR", callback_data="cat_nostalgic")
+            InlineKeyboardButton("😂 KULGILI", callback_data="cat_funny"),
+            InlineKeyboardButton("👴 NOSTALGIK", callback_data="cat_nostalgic")
         ],
         [
-            InlineKeyboardButton("🎉 TОRТ OYBIY", callback_data="cat_festive"),
-            InlineKeyboardButton("😢 YURAK SURAXON", callback_data="cat_emotional")
+            InlineKeyboardButton("🎉 BAYRAMONA", callback_data="cat_festive"),
+            InlineKeyboardButton("😢 EMOTSIONAL", callback_data="cat_emotional")
         ],
         [
-            InlineKeyboardButton("🔥 DRAMATIK ILHOM", callback_data="cat_dramatic"),
-            InlineKeyboardButton("🕰 ESKI STIL", callback_data="cat_retro")
+            InlineKeyboardButton("🔥 DRAMATIK", callback_data="cat_dramatic"),
+            InlineKeyboardButton("🕰 RETRO", callback_data="cat_retro")
         ],
         [
-            InlineKeyboardButton("❤️ SEVGI & TILISHMACHILIQ", callback_data="cat_sentimental"),
-            InlineKeyboardButton("🥳 VESELANIE", callback_data="cat_party")
+            InlineKeyboardButton("❤️ SENTIMENTAL", callback_data="cat_sentimental"),
+            InlineKeyboardButton("🥳 PARTY", callback_data="cat_party")
         ],
         [
-            InlineKeyboardButton("😔 OHANGNI SHODLIKNI", callback_data="cat_soft_sad"),
-            InlineKeyboardButton("💥 KUCHLI JASORAT", callback_data="cat_strong_dramatic")
+            InlineKeyboardButton("😔 SOG'INCH", callback_data="cat_soft_sad"),
+            InlineKeyboardButton("💥 KUCHLI", callback_data="cat_strong_dramatic")
         ],
         [
-            InlineKeyboardButton("💼 LIDER & RAHBAR", callback_data="cat_boss_confident")
+            InlineKeyboardButton("💼 BOSS", callback_data="cat_boss_confident")
         ],
         [
             InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")
@@ -2335,10 +2335,7 @@ async def category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         text="📁 <b>KATEGORIYA BOYICHA VIDEO</b>\n\n"
-             "🎬 <b>Kategoriyani Tanlang:</b>\n\n"
-             "Har kategoriyada 5 ta unique prompt!\n"
-             "Rasmingizni yuborsangiz, 5ta random prompt ishlatiladi!\n\n"
-             "✨ <b>11 KATEGORIYA - 55+ PROMPT!</b>",
+             "🎬 <b>Kategoriyani Tanlang:</b>",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
@@ -2354,17 +2351,17 @@ async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     
     # Kategoriya nomini olish
     category_names = {
-        "funny": "😂 XO'RJAKK & HAZIL",
-        "nostalgic": "👴 ESKI KUNLAR",
-        "festive": "🎉 TОRТ OYBIY",
-        "emotional": "😢 YURAK SURAXON",
-        "dramatic": "🔥 DRAMATIK ILHOM",
-        "retro": "🕰 ESKI STIL",
-        "sentimental": "❤️ SEVGI & TILISHMACHILIQ",
-        "party": "🥳 VESELANIE",
-        "soft_sad": "😔 OHANGNI SHODLIKNI",
-        "strong_dramatic": "💥 KUCHLI JASORAT",
-        "boss_confident": "💼 LIDER & RAHBAR"
+        "funny": "😂 KULGILI",
+        "nostalgic": "👴 NOSTALGIK",
+        "festive": "🎉 BAYRAMONA",
+        "emotional": "😢 EMOTSIONAL",
+        "dramatic": "🔥 DRAMATIK",
+        "retro": "🕰 RETRO",
+        "sentimental": "❤️ SENTIMENTAL",
+        "party": "🥳 PARTY",
+        "soft_sad": "😔 SOG'INCH",
+        "strong_dramatic": "💥 KUCHLI",
+        "boss_confident": "💼 BOSS"
     }
     
     keyboard = [
@@ -2374,8 +2371,6 @@ async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     
     await query.edit_message_text(
         text=f"<b>{category_names.get(category, category)}</b>\n\n"
-             "Bu kategoriyada 5 ta unique prompt!\n"
-             "Rasm yuborsa, random 5ta prompt ishlatiladi!\n\n"
              "📸 <b>Rasm yuboringmi?</b>",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
