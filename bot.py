@@ -1526,24 +1526,50 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_admin = user.id in ADMIN_IDS
     admin_badge = " 👑" if is_admin else ""
     
-    cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video" if not is_admin else "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    # Cheklov yoki admin status
+    if is_admin:
+        cheklov_text = "👑 **Siz Admin!**\n⚡ Cheklovsiz video yaratish\n✨ Unlimited quvvat!"
+    else:
+        cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video\n💡 Kuting, keyin qayta urinib ko'ring!"
     
     welcome_message = (
-        f"🎬 **Jonlantir AI**{admin_badge}\n\n"
-        f"Assalomu alaykum, {user.first_name}!\n\n"
+        f"╔══════════════════════╗\n"
+        f"║ 🎬 **Jonlantir AI** {admin_badge} ║\n"
+        f"╚══════════════════════╝\n\n"
         
-        "📸 **Rasm yuboring**\n"
-        "🤖 **AI jonli videoga aylantiradi**\n\n"
+        f"👋 Salom, **{user.first_name}**!\n\n"
         
-        "🗣️ O'zbekcha ovoz bilan:\n"
-        "👴 Bobo | 👵 Buvi | 👨 Ota\n"
-        "💕 Ona | 👦 Bola | 👥 Oila\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "✨ **NIMA QILISH MUMKIN?**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        f"{cheklov_text}\n\n"
+        "📸 **Rasm yubor** → 🎬 **Video olish**\n\n"
         
-        "━━━━━━━━━━━━━━━━━━\n"
+        "🤖 *AI rasmni jonli videoga aylantiradi!*\n"
+        "🗣️ *O'zbek tilida suhbatlashadi*\n"
+        "✨ *HD sifatda video*\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎭 **VIDEO OVOZLARI:**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        "👴 **Bobo** — Hikmat va kisloviy ovoz\n"
+        "👵 **Buvi** — Sabab va mehribonlik\n"
+        "👨 **Ota** — Kuchli va haqiqiy ovoz\n"
+        "💕 **Ona** — Mehr va iltifo\n"
+        "👦 **Bola** — Quvonch va energiya\n"
+        "👥 **Oila** — Birga suhbat\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{cheklov_text}\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        "🎯 **BOSHLAYLIK!**\n"
+        "👇 **Pastdagi tugmani bosing yoki rasm yubor**\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
-        "━━━━━━━━━━━━━━━━━━"
+        "━━━━━━━━━━━━━━━━━━━━━━"
     )
     
     # MENYU TUGMALARI
