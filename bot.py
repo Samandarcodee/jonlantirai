@@ -1550,14 +1550,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
-            InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
+            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu")
         ],
         [
-            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu"),
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
             InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
-        ],
-        [
-            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2283,27 +2280,27 @@ async def category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Kategoriya tugmalari
     keyboard = [
         [
-            InlineKeyboardButton("😂 KULGILI", callback_data="cat_funny"),
-            InlineKeyboardButton("👴 NOSTALGIK", callback_data="cat_nostalgic")
+            InlineKeyboardButton("😂 XO'RJAKK & HAZIL", callback_data="cat_funny"),
+            InlineKeyboardButton("👴 ESKI KUNLAR", callback_data="cat_nostalgic")
         ],
         [
-            InlineKeyboardButton("🎉 BAYRAMONA", callback_data="cat_festive"),
-            InlineKeyboardButton("😢 EMOTSIONAL", callback_data="cat_emotional")
+            InlineKeyboardButton("🎉 TОRТ OYBIY", callback_data="cat_festive"),
+            InlineKeyboardButton("😢 YURAK SURAXON", callback_data="cat_emotional")
         ],
         [
-            InlineKeyboardButton("🔥 DRAMATIK", callback_data="cat_dramatic"),
-            InlineKeyboardButton("🕰 RETRO", callback_data="cat_retro")
+            InlineKeyboardButton("🔥 DRAMATIK ILHOM", callback_data="cat_dramatic"),
+            InlineKeyboardButton("🕰 ESKI STIL", callback_data="cat_retro")
         ],
         [
-            InlineKeyboardButton("❤️ SENTIMENTAL", callback_data="cat_sentimental"),
-            InlineKeyboardButton("🥳 PARTY", callback_data="cat_party")
+            InlineKeyboardButton("❤️ SEVGI & TILISHMACHILIQ", callback_data="cat_sentimental"),
+            InlineKeyboardButton("🥳 VESELANIE", callback_data="cat_party")
         ],
         [
-            InlineKeyboardButton("😔 SOG'INCH", callback_data="cat_soft_sad"),
-            InlineKeyboardButton("💥 KUCHLI", callback_data="cat_strong_dramatic")
+            InlineKeyboardButton("😔 OHANGNI SHODLIKNI", callback_data="cat_soft_sad"),
+            InlineKeyboardButton("💥 KUCHLI JASORAT", callback_data="cat_strong_dramatic")
         ],
         [
-            InlineKeyboardButton("💼 BOSS", callback_data="cat_boss_confident")
+            InlineKeyboardButton("💼 LIDER & RAHBAR", callback_data="cat_boss_confident")
         ],
         [
             InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")
@@ -2331,17 +2328,17 @@ async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     
     # Kategoriya nomini olish
     category_names = {
-        "funny": "😂 KULGILI",
-        "nostalgic": "👴 NOSTALGIK",
-        "festive": "🎉 BAYRAMONA",
-        "emotional": "😢 EMOTSIONAL",
-        "dramatic": "🔥 DRAMATIK",
-        "retro": "🕰 RETRO",
-        "sentimental": "❤️ SENTIMENTAL",
-        "party": "🥳 PARTY",
-        "soft_sad": "😔 SOG'INCH",
-        "strong_dramatic": "💥 KUCHLI",
-        "boss_confident": "💼 BOSS"
+        "funny": "😂 XO'RJAKK & HAZIL",
+        "nostalgic": "👴 ESKI KUNLAR",
+        "festive": "🎉 TОRТ OYBIY",
+        "emotional": "😢 YURAK SURAXON",
+        "dramatic": "🔥 DRAMATIK ILHOM",
+        "retro": "🕰 ESKI STIL",
+        "sentimental": "❤️ SEVGI & TILISHMACHILIQ",
+        "party": "🥳 VESELANIE",
+        "soft_sad": "😔 OHANGNI SHODLIKNI",
+        "strong_dramatic": "💥 KUCHLI JASORAT",
+        "boss_confident": "💼 LIDER & RAHBAR"
     }
     
     keyboard = [
