@@ -1887,6 +1887,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin panel - faqat adminlar uchun"""
     user = update.effective_user
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
     # Admin emasligini tekshirish
     if user.id not in ADMIN_IDS:
@@ -1935,7 +1936,135 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━"
     )
     
-    await update.message.reply_text(admin_text, parse_mode='Markdown')
+    # ADMIN MENYU TUGMALARI
+    keyboard = [
+        [
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
+            InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
+        ],
+        [
+            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats"),
+            InlineKeyboardButton("🗑️ O'chirish", callback_data="admin_delete_user")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
+
+
+# ==========================================
+# 👥 ADMIN USERS LIST - FOYDALANUVCHILAR ROYHATI
+# ==========================================
+async def admin_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Barcha foydalanuvchilar ro'yxati"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    users_list = ""
+    for i, (user_id, user_data) in enumerate(user_db.data.items(), 1):
+        username = user_data.get('username') or 'username_yoq'
+        first_name = user_data.get('first_name', 'Noma\'lum')
+        videos = user_data.get('videos_created', 0)
+        
+        users_list += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
+    
+    await query.edit_message_text(
+        text=f"👥 **BARCHA FOYDALANUVCHILAR ({len(user_db.data)} TA)**\n\n{users_list}",
+        parse_mode='Markdown'
+    )
+
+
+# ==========================================
+# 📨 BROADCAST - BARCHA USERLARGA XABAR
+# ==========================================
+async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast xabarini yuborish"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    await query.edit_message_text(
+        text="📨 <b>BROADCAST XABARI</b>\n\n"
+             "Xabar matni yozing.\n"
+             "U barcha foydalanuvchilarga yuboriladi!\n\n"
+             "<b>Misol:</b> 'Yangi funktsiya qo'shildi!'",
+        parse_mode='HTML'
+    )
+    
+    context.user_data['waiting_for_broadcast'] = True
+
+
+# ==========================================
+# 📊 DETAILED STATS - BATAFSIL STATISTIKA
+# ==========================================
+async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Batafsil statistika"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    stats = user_db.get_all_stats()
+    
+    detailed_stats = (
+        f"📊 <b>BATAFSIL STATISTIKA</b>\n\n"
+        f"👥 Jami foydalanuvchilar: <b>{stats['total_users']}</b>\n"
+        f"🎬 Jami videolar: <b>{stats['total_videos']}</b>\n"
+        f"✅ Bugun faol: <b>{stats['active_today']}</b>\n\n"
+        f"📈 O'rtacha: <b>{stats['total_videos'] // max(stats['total_users'], 1)}</b> video/user"
+    )
+    
+    await query.edit_message_text(detailed_stats, parse_mode='HTML')
+
+
+async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast xabarini barcha userlarga yuborish"""
+    if not context.user_data.get('waiting_for_broadcast'):
+        return
+    
+    if not update.effective_user.id in ADMIN_IDS:
+        return
+    
+    message_text = update.message.text
+    
+    # Barcha userlarga xabar yuborish
+    success_count = 0
+    error_count = 0
+    
+    for user_id in user_db.data.keys():
+        try:
+            await context.bot.send_message(
+                chat_id=int(user_id),
+                text=f"📢 <b>ADMIN XABARI</b>\n\n{message_text}",
+                parse_mode='HTML'
+            )
+            success_count += 1
+        except Exception as e:
+            error_count += 1
+            logger.error(f"Broadcast error for user {user_id}: {e}")
+    
+    # Admin'ga result
+    result_text = (
+        f"✅ <b>BROADCAST TUGALLANDI</b>\n\n"
+        f"✅ Muvaffaqiyatli: <b>{success_count}</b>\n"
+        f"❌ Xato: <b>{error_count}</b>\n\n"
+        f"🎯 Jami: <b>{success_count + error_count}</b>"
+    )
+    
+    await update.message.reply_text(result_text, parse_mode='HTML')
+    context.user_data['waiting_for_broadcast'] = False
 
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2676,8 +2805,16 @@ def main():
         application.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_to_menu$"))
         application.add_handler(CallbackQueryHandler(wait_for_photo, pattern="^wait_for_photo$"))
         
+        # ADMIN CALLBACKS
+        application.add_handler(CallbackQueryHandler(admin_users_list, pattern="^admin_users_list$"))
+        application.add_handler(CallbackQueryHandler(admin_broadcast, pattern="^admin_broadcast$"))
+        application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
+        
         # Photo va text handlers
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        
+        # BROADCAST MESSAGE HANDLER
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         # Error handler
