@@ -83,20 +83,24 @@ class UserDatabase:
             logger.error(f"Error saving database: {e}")
     
     def add_user(self, user_id, username, first_name):
-        """Add new user to database"""
+        """Add new user to database - Store user ID and username securely"""
         user_id_str = str(user_id)
         if user_id_str not in self.data:
+            # Ensure username is not None
+            safe_username = username if username else "No_username"
+            safe_first_name = first_name if first_name else "Noma'lum"
+            
             self.data[user_id_str] = {
-                'user_id': user_id,
-                'username': username,
-                'first_name': first_name,
+                'user_id': user_id,                    # ← INTEGER ID
+                'username': safe_username,             # ← USERNAME
+                'first_name': safe_first_name,
                 'videos_created': 0,
                 'last_video_time': 0,
                 'join_date': time.time(),
                 'total_requests': 0
             }
             self.save_db()
-            logger.info(f"New user added: {user_id} - {username}")
+            logger.info(f"✅ New user added - ID: {user_id}, Username: {safe_username}, Name: {safe_first_name}")
     
     def can_create_video(self, user_id):
         """Check if user can create video (6 hour cooldown)"""
