@@ -1925,10 +1925,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # DEBUG: Step 1
         logger.info(f"📊 ADMIN: User {user.id} accessing admin panel")
         
+        # RELOAD DATABASE (in case it was updated)
+        logger.info(f"📊 ADMIN: Reloading database from file...")
+        user_db.data = user_db.load_db()
+        logger.info(f"📊 ADMIN: Database reloaded. Total entries: {len(user_db.data)}")
+        
         # Statistikani olish
         logger.info(f"📊 ADMIN: Getting stats...")
         stats = user_db.get_all_stats()
-        logger.info(f"📊 ADMIN: Stats retrieved - Users: {stats}")
+        logger.info(f"📊 ADMIN: Stats retrieved - Total Users: {stats.get('total_users', 0)}, Videos: {stats.get('total_videos', 0)}, Active: {stats.get('active_today', 0)}")
         
         if not stats:
             logger.warning("📊 ADMIN: Stats is None, using defaults")
