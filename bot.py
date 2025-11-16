@@ -1950,21 +1950,23 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             top_users = list(user_db.data.items())[:10]
             logger.info(f"📊 ADMIN: Using fallback {len(top_users)} users")
         
-        # Admin text - MAX 4000 CHARACTER (Telegram limit 4096)
+        # Admin text - HTML MODE (Markdown broke with special chars!)
+        # Using HTML to avoid markdown parsing errors
         admin_text = (
             "┏━━━━━━━━━━━━━━━━━┓\n"
-            "┃ 👑 **ADMIN** 👑 ┃\n"
+            "┃ 👑 <b>ADMIN</b> 👑 ┃\n"
             "┗━━━━━━━━━━━━━━━━━┛\n\n"
             
-            f"👥 Userlar: **{stats.get('total_users', 0)}**\n"
-            f"🎬 Videolar: **{stats.get('total_videos', 0)}**\n"
-            f"✅ Bugun: **{stats.get('active_today', 0)}**\n\n"
+            f"👥 Userlar: <b>{stats.get('total_users', 0)}</b>\n"
+            f"🎬 Videolar: <b>{stats.get('total_videos', 0)}</b>\n"
+            f"✅ Bugun: <b>{stats.get('active_today', 0)}</b>\n\n"
             
-            "🏆 **TOP 10:**\n"
+            "🏆 <b>TOP 10:</b>\n"
         )
         
-        # User list qo'shish - SAFE
+        # User list qo'shish - SAFE + ESCAPE HTML
         logger.info(f"📊 ADMIN: Processing {len(top_users)} users for display")
+        users_added = 0
         for i, (user_id, user_data) in enumerate(top_users, 1):
             try:
                 if not isinstance(user_data, dict):
@@ -1975,6 +1977,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 first_name = user_data.get('first_name', 'Noma\'lum')
                 videos = user_data.get('videos_created', 0)
                 
+                # HTML escape special characters
+                first_name = first_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if username:
+                    username = username.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                
                 # Username yoki ID ko'rsatish
                 if username and isinstance(username, str) and username.strip():
                     user_display = f"@{username}"
@@ -1983,10 +1990,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 line = f"{i}. {first_name} ({user_display}) - {videos} video\n"
                 admin_text += line
+                users_added += 1
                 logger.debug(f"📊 ADMIN: Added user {i}: {first_name}")
             except Exception as user_error:
                 logger.error(f"📊 ADMIN: User {user_id} display error: {user_error}")
                 continue
+        
+        logger.info(f"📊 ADMIN: Added {users_added} users to admin text")
         
         admin_text += (
             "\n━━━━━━━━━━━━━━━━━━\n"
@@ -2012,9 +2022,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
         
-        logger.info(f"📊 ADMIN: Sending admin panel message")
+        logger.info(f"📊 ADMIN: Sending admin panel message with HTML parsing")
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
+        # CHANGED: Markdown → HTML to fix parsing issues
+        await update.message.reply_text(admin_text, parse_mode='HTML', reply_markup=reply_markup)
         logger.info(f"✅ ADMIN: Admin panel sent successfully")
         
     except Exception as e:
