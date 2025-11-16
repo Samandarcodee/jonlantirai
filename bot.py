@@ -4,8 +4,8 @@ import logging
 import random
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 import requests
 from dotenv import load_dotenv
 import json
@@ -963,6 +963,92 @@ class ImageAnalyzer:
         }
 
 
+# ============================================================
+# 🎭 20 TA KULGILI/HAZIL PROMPT - COMEDY PROMPTS
+# ============================================================
+COMEDY_PROMPTS = [
+    {
+        "name": "😲 Hayron + Kulgili Prikol",
+        "prompt": "Make the character act surprised at first, widen the eyes, pull the head back a bit, then slowly turn playful with a smirk. Add eyebrow jumps and light head tilts. Let them say in Uzbek: 'Voy-voy, bu menmi? Rasmda bunaqa chiroyli chiqqanman deb o'ylamagandimku! Rostdan ham shu menmanmi, yoki AI o'zimga makiyaj qilib qo'ydimi?'"
+    },
+    {
+        "name": "🤭 O'zini Maqtab, Lekin Hazil",
+        "prompt": "Show confident expressions, small shoulder lift, funny grin, and a slow proud nod. Let them say: 'Ha, qarabsizmi, men hali ham super yulduzman! Hamma shunaqa rasmga tusholmaydi. Kamera meni ko'rsa o'zi xursand bo'lib ketadi!'"
+    },
+    {
+        "name": "😴 Charchagan, Lekin Kulgili",
+        "prompt": "Add tired eye rub, long sigh, then sudden smile and playful expression. Let them say: 'Ehh, bugun juda charchadim… lekin kamerani ko'rib yana jonlanib ketdim. Qarang, men charchasam ham chiroyli ko'rinaman!'"
+    },
+    {
+        "name": "🤨 Shubhalanayotgandek, Qiziqib",
+        "prompt": "Raise one eyebrow, lean forward, squint slightly, then smirk. Let them say: 'Hmm… siz nimadir yashiryapsiz. Rostini ayting, nega rasmimni shuncha ko'p ko'ryapsiz? Chiroyliligim sababmi yoki tekshiryapsizmi?'"
+    },
+    {
+        "name": "😆 Jiddiy → Kulgili",
+        "prompt": "Start serious with firm lips, then break into laughter halfway. Let them say: 'Mana, muhim e'lon bor edi… yo'q-yo'q, bo'lmadi. Men jiddiy gapira olmayman, hazilsiz yashab bo'lmaydi-da!'"
+    },
+    {
+        "name": "🧠 O'zini Aqlli Ko'rsatish",
+        "prompt": "Use slow nods, thoughtful eyes, hand-under-chin-like head tilt. Let them say: 'Men hammasini tahlil qildim… xulosam shuki: men juda aqlliman. Shunchaki rasmga qarab ham bilsa bo'ladi!'"
+    },
+    {
+        "name": "⚡ Tez Gapiradigan, Sho'x",
+        "prompt": "Add fast blinking, energetic head movement, wide smile. Let them say: 'Ha, salom! Nima gaplar? Hammayoq joyida-a? Men bugun juda kayfiyatdaman, shunchaki rasmni ko'rib o'zimni kuldirib oldim!'"
+    },
+    {
+        "name": "😎 O'ta Beparvo, Yengil Hazil",
+        "prompt": "Add relaxed posture, soft smile, lazy blinking. Let them say: 'Hmm… rasmimni ko'rdim, yaxshiku. Juda chiroyli chiqibman. Endi buni profilga qo'ysam bo'ladimi, yo ko'p maqtanib ketamanmi?'"
+    },
+    {
+        "name": "😤 Cool Bo'lib Ko'rinish",
+        "prompt": "Add slow motion-like head turn, small smirk, confident eyes. Let them say: 'Ha, men shunaqaman… cool. O'zim ham bilaman. Siz ham bilasiz. Hammaning ko'ziga tashlanib turadi-da!'"
+    },
+    {
+        "name": "🤣 O'zidan Kulyayotgan Komedik",
+        "prompt": "Add laugh, shoulder shake, playful look. Let them say: 'Meni bunaqa ko'rishingiz kutilmagan bo'lsa kerak? O'zim ham hayron bo'ldim. Rasmim juda jiddiy, lekin men unday emasman!'"
+    },
+    {
+        "name": "🥺 Yoshligini Eslayotgandek",
+        "prompt": "Add far-away look, then playful shrug. Let them say: 'Ehh, yoshligimda bundan ham chiroyli edim. Hozir ham yomon emasman, to'g'rimi?'"
+    },
+    {
+        "name": "🎭 Dramatik + Kulgili",
+        "prompt": "Add dramatic pause, slow head movement, exaggerated expressions. Let them say: 'Mana, hozir sizlarga juda muhim gap aytaman… Tayyor bo'ling… Men juda zor chiqibman!'"
+    },
+    {
+        "name": "😉 Ko'z Qisib, Prank Qilish",
+        "prompt": "Add wink, smirk, playful head tilt. Let them say: 'Hoy, meni bunchalik rasmga qarab nima qilayapsiz? Xo'sh, yoqib qoldimi?'"
+    },
+    {
+        "name": "🤫 Sir Aytmoqchi",
+        "prompt": "Lean forward, lower voice, raise eyebrow. Let them say: 'Bir sir aytay… bu rasmni tanimay qoldingizmi? Men-ku, men! Rasm o'zgarmagan, men o'zgarganman!'"
+    },
+    {
+        "name": "😤 Asabiylanayotgandek",
+        "prompt": "Add fake annoyance: eye roll, lip purse, then smile. Let them say: 'Ehh, rasmga qarashni to'xtating! Uyaltirib yuboryapsiz-ku! Mana, kulib yubordim.'"
+    },
+    {
+        "name": "👑 O'zini Boss Qilish",
+        "prompt": "Add chin-up, authoritative look, proud expression. Let them say: 'Ha, men boshlig'man. O'zimning rasmimga o'zim buyruq beraman!'"
+    },
+    {
+        "name": "🔄 Kutilmagan O'zgarish",
+        "prompt": "Start calm, suddenly switch to excited tone. Let them say: 'Shunaqa tinchgina turuvdim… Birdan rasmni ko'rdim-da: voy, bu kim? Men-ku!'"
+    },
+    {
+        "name": "📸 Kameraga Yaqinlashib Gapirish",
+        "prompt": "Lean closer, widen eyes, whisper-like comedic tone. Let them say: 'Hey, juda yaqin kelyapmanmi? Kamera meni ko'tara olyaptimi o'zi?'"
+    },
+    {
+        "name": "🤐 Ovozini Pastlatib Hazil",
+        "prompt": "Add low voice, mischievous smirk. Let them say: 'Bir qarang, qanchalik jiddiy ko'rinyapman… lekin aslida kulgidan o'lib qolyapman!'"
+    },
+    {
+        "name": "⭐ Mashhur Qilib Tasavvur",
+        "prompt": "Add celebrity-like wave, shiny smile, confident gestures. Let them say: 'Ha, salom, men — mashhur odam! Rasmimni imzo bilan sotishim kerak sheklli!'"
+    }
+]
+
 # 10 ta yangi emotsional promtlar (ZAHIRA sifatida saqlanadi)
 VIDEO_PROMPTS_BACKUP = [
     {
@@ -1292,7 +1378,7 @@ veo_generator = GoogleVeoVideoGenerator(
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /start command"""
+    """Handler for /start command - MENYU BILAN"""
     user = update.effective_user
     
     # Foydalanuvchini bazaga qo'shish
@@ -1322,7 +1408,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "━━━━━━━━━━━━━━━━━━"
     )
     
-    await update.message.reply_text(welcome_message, parse_mode='Markdown')
+    # MENYU TUGMALARI
+    keyboard = [
+        [
+            InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
+            InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
+        ],
+        [
+            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu"),
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1422,8 +1521,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_bytes = analyzer.enhance_old_photo(image_bytes)
             logger.info(f"✨ Old photo enhanced for user {user.id}")
         
-        # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
-        selected_style = analyzer.generate_uzbek_prompt(analysis)
+        # COMEDY SHABLONI QO'SHMA QILISH - RANDOM SELECT
+        selected_template = context.user_data.get('selected_template', 'auto')
+        
+        if selected_template == 'comedy':
+            # Comedy shablonidan random prompt tanlash
+            selected_style = random.choice(COMEDY_PROMPTS)
+            logger.info(f"🎭 COMEDY MODE: User {user.id} - {selected_style['name']}")
+        else:
+            # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
+            selected_style = analyzer.generate_uzbek_prompt(analysis)
         
         # DEBUG LOG
         logger.info(f"🎭 Selected scenario: {selected_style['name']}")
@@ -1727,6 +1834,409 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(stats_text, parse_mode='Markdown')
 
 
+# ==========================================
+# 🎨 SHABLONLAR MENYU - TEMPLATES MENU
+# ==========================================
+async def templates_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shablonlar menyu - Sevgi, Bayram, Oila, Xotira, Trend, COMEDY"""
+    query = update.callback_query
+    await query.answer()
+    
+    template_keyboards = [
+        [
+            InlineKeyboardButton("❤️ Sevgi", callback_data="template_love"),
+            InlineKeyboardButton("🎉 Bayram", callback_data="template_holiday")
+        ],
+        [
+            InlineKeyboardButton("👨‍👩‍👧 Oila", callback_data="template_family"),
+            InlineKeyboardButton("💫 Xotira", callback_data="template_memory")
+        ],
+        [
+            InlineKeyboardButton("🔥 Trend", callback_data="template_trend"),
+            InlineKeyboardButton("🎭 COMEDY", callback_data="template_comedy")
+        ],
+        [
+            InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")
+        ]
+    ]
+    
+    template_markup = InlineKeyboardMarkup(template_keyboards)
+    
+    await query.edit_message_text(
+        text="🎨 <b>SHABLONLARNI TANLANG</b>\n\n"
+             "Qaysi mavzu haqida video yaratmoqchi?",
+        reply_markup=template_markup,
+        parse_mode="HTML"
+    )
+
+
+# ==========================================
+# 💖 TEMPLATE CALLBACKS
+# ==========================================
+async def template_love(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sevgi shabloni"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'love'
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="❤️ <b>SEVGI SHABLONI</b>\n\n"
+             "Bu shablonda rasmingiz sevgi bilan jonlanadi:\n"
+             "• Yumrak nigohlar\n"
+             "• Iliq tabassum\n"
+             "• Qalb yubiydigan mavzular\n\n"
+             "Rasm yuboring:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def template_holiday(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bayram shabloni"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'holiday'
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="🎉 <b>BAYRAM SHABLONI</b>\n\n"
+             "Bu shablonda rasmingiz bayramga tolangan videoga aylandi:\n"
+             "• Quvonch bilan kulgi\n"
+             "• Bayramchil hifasi\n"
+             "• O'zbek bayram mavzulari\n\n"
+             "Rasm yuboring:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def template_family(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Oila shabloni"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'family'
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="👨‍👩‍👧 <b>OILA SHABLONI</b>\n\n"
+             "Bu shablonda rasmingiz oilaviy muhabbat bilan jonlanadi:\n"
+             "• Oilaning kuchli bog'lanishi\n"
+             "• Bir-birlari bilan qo'llab-quvvatlash\n"
+             "• Oilaviy xotiralar\n\n"
+             "Rasm yuboring:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def template_memory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Xotira shabloni"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'memory'
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="💫 <b>XOTIRA SHABLONI</b>\n\n"
+             "Bu shablonda rasmingiz o'tgan xotiralar bilan jonlanadi:\n"
+             "• O'tgan kunlarni eslash\n"
+             "• Sog'inch bilan tabassum\n"
+             "• Samimiy hissiyotlar\n\n"
+             "Rasm yuboring:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def template_trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Trend shabloni"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'trend'
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="🔥 <b>TREND SHABLONI</b>\n\n"
+             "Bu shablonda rasmingiz trend mavzuda jonlanadi:\n"
+             "• Zamonaviy video effektlari\n"
+             "• Dinamik harakatlar\n"
+             "• Sifatli ta'mir\n\n"
+             "Rasm yuboring:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def template_comedy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """🎭 COMEDY SHABLONI - Random kulgili video"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_template'] = 'comedy'
+    
+    # Random prompt tanlash
+    comedy_prompt = random.choice(COMEDY_PROMPTS)
+    context.user_data['comedy_name'] = comedy_prompt['name']
+    context.user_data['comedy_prompt'] = comedy_prompt['prompt']
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("🔄 Boshqa Comedik", callback_data="template_comedy")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="templates_menu")]
+    ]
+    
+    prompt_list = "\n".join([f"• {p['name']}" for p in COMEDY_PROMPTS[:5]])
+    
+    await query.edit_message_text(
+        text="🎭 <b>COMEDY SHABLONI - RANDOM KULGILI VIDEO!</b>\n\n"
+             f"<b>Tanlangan:</b> {comedy_prompt['name']}\n\n"
+             "Bu shablonda rasmingiz:\n"
+             "• Kulgili hayotlanadi!\n"
+             "• O'zga sho'x mulohaza qiladi\n"
+             "• Hazilga to'la video chiqadi\n\n"
+             "20 ta kulgili ko'rik mavjud! 🎉\n\n"
+             "Rasm yuboring yoki boshqa comedikni tanlang:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+# ==========================================
+# ℹ️ YORDAM MENYU - HELP MENU
+# ==========================================
+async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Yordam menyu"""
+    query = update.callback_query
+    await query.answer()
+    
+    help_keyboards = [
+        [InlineKeyboardButton("📘 Qanday ishlaydi?", callback_data="help_how")],
+        [InlineKeyboardButton("📩 Admin bilan bog'lanish", callback_data="help_admin")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+    ]
+    
+    help_markup = InlineKeyboardMarkup(help_keyboards)
+    
+    await query.edit_message_text(
+        text="ℹ️ <b>YORDAM</b>\n\n"
+             "Qaysi mavzu haqida bilmoqchi?",
+        reply_markup=help_markup,
+        parse_mode="HTML"
+    )
+
+
+async def help_how(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Qanday ishlaydi"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="help_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="📘 <b>QANDAY ISHLAYDI?</b>\n\n"
+             "<b>1️⃣ Rasm Yuboring</b>\n"
+             "Yuqori sifatli rasm yuboring (JPG yoki PNG)\n\n"
+             "<b>2️⃣ Shablonni Tanlang</b>\n"
+             "Sevgi, Bayram, Oila, Xotira yoki Trend\n\n"
+             "<b>3️⃣ Kuting</b>\n"
+             "AI rasmni 2-15 daqiqada jonli videoga aylantiradi\n\n"
+             "<b>4️⃣ Video Olish</b>\n"
+             "Tayyor videoni download qiling!\n\n"
+             "<b>⏱️ CHEKLOV:</b> Har 6 soatda 1 ta video",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def help_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin bilan bog'lanish"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="help_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="📩 <b>ADMIN BILAN BOG'LANISH</b>\n\n"
+             "Agar muammo yoki taklifinggiz bo'lsa:\n\n"
+             "<b>👤 Telegram:</b> @diorbek_dev\n"
+             "<b>📧 Email:</b> support@jonlantir.uz\n"
+             "<b>💬 Telegramm guruh:</b> @jonlantir_ai_group\n\n"
+             "Biz sizning fikringizni qadrladik! 🙏",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+# ==========================================
+# 📊 STATISTICS BUTTON
+# ==========================================
+async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Statistika tugmasi (callback version)"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    user_db.add_user(user.id, user.username, user.first_name)
+    stats = user_db.get_user_stats(user.id)
+    
+    if not stats:
+        await query.edit_message_text("Ma'lumot topilmadi.")
+        return
+    
+    # Keyingi video vaqti
+    can_create, time_left = user_db.can_create_video(user.id)
+    
+    is_admin = user.id in ADMIN_IDS
+    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    
+    next_video = ""
+    if not can_create and not is_admin:
+        hours = int(time_left // 3600)
+        minutes = int((time_left % 3600) // 60)
+        next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
+    elif is_admin:
+        next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
+    else:
+        next_video = "\n✅ **Hozir video yarata olasiz!**"
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+    ]
+    
+    stats_text = (
+        "📊 <b>STATISTIKA</b>\n\n"
+        
+        f"👤 {stats['first_name']}\n"
+        f"🏅 {status}\n\n"
+        
+        f"🎬 Videolar: <b>{stats['videos_created']}</b>\n"
+        f"{next_video}\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    
+    await query.edit_message_text(stats_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+# ==========================================
+# 🎬 VIDEO YARATISH BUTTONLARI
+# ==========================================
+async def create_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Video yaratish tugmasi"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="🎬 <b>VIDEO YARATISH</b>\n\n"
+             "Rasm yuboring, shundan so'ng AI uni jonli videoga aylantiradi!\n\n"
+             "💡 <b>Maslahat:</b> Yuqori sifatli rasm ishlatish (min 512x512)",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+# ==========================================
+# ORQAGA TUGMASI
+# ==========================================
+async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Asosiy menyuga qaytish"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    is_admin = user.id in ADMIN_IDS
+    admin_badge = " 👑" if is_admin else ""
+    
+    cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video" if not is_admin else "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    
+    main_menu_text = (
+        f"🎬 **Jonlantir AI**{admin_badge}\n\n"
+        f"Assalomu alaykum, {user.first_name}!\n\n"
+        
+        "📸 **Rasm yuboring**\n"
+        "🤖 **AI jonli videoga aylantiradi**\n\n"
+        
+        "🗣️ O'zbekcha ovoz bilan:\n"
+        "👴 Bobo | 👵 Buvi | 👨 Ota\n"
+        "💕 Ona | 👦 Bola | 👥 Oila\n\n"
+        
+        f"{cheklov_text}\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
+            InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
+        ],
+        [
+            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu"),
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        text=main_menu_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+
+# ==========================================
+# WAIT FOR PHOTO PLACEHOLDER
+# ==========================================
+async def wait_for_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rasmni kutish"""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+             "Pastdagi chat-da rasm yuboring va AI uni jonli videoga aylantiradi!",
+        parse_mode="HTML"
+    )
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /help command"""
     help_text = (
@@ -1843,6 +2353,26 @@ def main():
         application.add_handler(CommandHandler("scenarios", scenarios_command))
         application.add_handler(CommandHandler("admin", admin_panel))
         application.add_handler(CommandHandler("stats", my_stats))
+        
+        # MENYU CALLBACK HANDLERS
+        application.add_handler(CallbackQueryHandler(templates_menu, pattern="^templates_menu$"))
+        application.add_handler(CallbackQueryHandler(template_love, pattern="^template_love$"))
+        application.add_handler(CallbackQueryHandler(template_holiday, pattern="^template_holiday$"))
+        application.add_handler(CallbackQueryHandler(template_family, pattern="^template_family$"))
+        application.add_handler(CallbackQueryHandler(template_memory, pattern="^template_memory$"))
+        application.add_handler(CallbackQueryHandler(template_trend, pattern="^template_trend$"))
+        application.add_handler(CallbackQueryHandler(template_comedy, pattern="^template_comedy$"))
+        
+        application.add_handler(CallbackQueryHandler(help_menu, pattern="^help_menu$"))
+        application.add_handler(CallbackQueryHandler(help_how, pattern="^help_how$"))
+        application.add_handler(CallbackQueryHandler(help_admin, pattern="^help_admin$"))
+        
+        application.add_handler(CallbackQueryHandler(my_stats_button, pattern="^my_stats_button$"))
+        application.add_handler(CallbackQueryHandler(create_video, pattern="^create_video$"))
+        application.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_to_menu$"))
+        application.add_handler(CallbackQueryHandler(wait_for_photo, pattern="^wait_for_photo$"))
+        
+        # Photo va text handlers
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
