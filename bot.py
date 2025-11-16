@@ -1050,6 +1050,90 @@ COMEDY_PROMPTS = [
 ]
 
 # ============================================================
+# 🎭 KATEGORIYA PROMPTS - CATEGORY PROMPTS (11 KATEGORIYA)
+# ============================================================
+
+CATEGORY_PROMPTS = {
+    "funny": [
+        {"name": "Funny #1", "prompt": "Create a cheerful middle-aged Uzbek man with a friendly, humorous energy. Make him speak in a lively, light-hearted manner — add gentle comedic facial expressions such as playful eyebrow lifts, a mischievous half-smile. Let him deliver: 'Hoy, qaranglar, meni hali ham jiddiy deb o'ylayapsizmi? Yo'q, men hazilni sizlardan ko'proq bilaman!'"},
+        {"name": "Funny #2", "prompt": "Generate a humorous Uzbek uncle with a big, kind smile and lively personality. Make the portrait speak in a funny, cheerful way — add light chuckles, playful eye squints, raised eyebrows. Let him say: 'Voy bolalar, yana keldinglarmi? Tayyor bo'linglar, bugun sizlarni rosa kuldiraman!'"},
+        {"name": "Funny #3", "prompt": "Animate a playful young Uzbek man with a joyful vibe. Make him talk in a humorous, energetic style — add smirks, quick eyebrow pops, sudden tiny eye widenings. Let him say: 'To'xta, videoni o'chirib qo'ymang! Eng zo'r hazilimni endi aytaman — tayyor turing!'"},
+        {"name": "Funny #4", "prompt": "Bring to life an elderly Uzbek grandfather with a warm comedic charm. Make him speak with light humor — add gentle giggles, soft cheek lifts. Let him say: 'Eh, yoshlar! Meni qaribdi deb o'ylasangiz adashasiz — hali ham sizlardan chaqqonman!'"},
+        {"name": "Funny #5", "prompt": "Create a cheerful Uzbek woman with an expressive, humorous personality. Make her talk in a playful, upbeat manner — add bright smiles, teasing eyebrow motions. Let her say: 'Hoy, jiyanlar! Meni ko'rib hayron bo'lmanglar — men hali ham hazilning ustasidiman!'"}
+    ],
+    "nostalgic": [
+        {"name": "Nostalgik #1", "prompt": "Animate a wise elderly Uzbek man with a reflective, sentimental aura. Make him speak slowly and thoughtfully — add soft eye movements, gentle smile lines. Let him say: 'Ah, bolalar, eski kunlar esingizdami? Shuncha xotiralar qalbimni to'ldiradi…'"},
+        {"name": "Nostalgik #2", "prompt": "Create a middle-aged Uzbek woman with a soft, reflective expression. Make her talk in a gentle, reminiscent way — add slight eye squints, small nods. Let her deliver: 'Voy, qanday kunlar edi… Har bir lahza yuragimda saqlanib qolgan.'"},
+        {"name": "Nostalgik #3", "prompt": "Bring to life an elderly Uzbek grandfather with tender nostalgia. Make him speak in a soft, warm tone — add relaxed smile lines, gentle eyebrow lifts. Let him say: 'Har bir suratda eski xotiralar yashirin… Men ularni hech qachon unutmayman.'"},
+        {"name": "Nostalgik #4", "prompt": "Generate a reflective middle-aged Uzbek man with a calm, thoughtful presence. Make him talk in a slow, emotional manner. Let him say: 'O'sha davrlarni eslab, yuragim shodlanadi va ozgina hushyor bo'ladi.'"},
+        {"name": "Nostalgik #5", "prompt": "Animate an elderly Uzbek woman with serene, reminiscent energy. Make her speak with gentle warmth — add soft cheek lifts, small nods. Let her deliver: 'Ah, bolalar, o'tmishning shirin lahzalari doimo yuragimda yashaydi.'"}
+    ],
+    "festive": [
+        {"name": "Bayramona #1", "prompt": "Create a joyful Uzbek man celebrating with festive energy. Make him speak in a cheerful, lively tone — add broad smiles, playful eyebrow lifts, sparkling eyes. Let him say: 'Hayrli bayram, bolalar! Keling, birga quvonaylik va zavqlanaylik!'"},
+        {"name": "Bayramona #2", "prompt": "Animate a happy Uzbek woman in a party mood. Make her talk energetically with laughter — add bright eye sparkle, playful cheek lifts. Let her say: 'Voy, bayram keldi! Hamma birga kulaylik va quvonaylik!'"},
+        {"name": "Bayramona #3", "prompt": "Bring to life a middle-aged Uzbek uncle full of festive cheer. Make him speak in an uplifting, warm tone — add hearty smiles, twinkling eyes. Let him say: 'Bayram muborak, bolalar! Bugun faqat quvonch va xursandlik bo'lsin!'"},
+        {"name": "Bayramona #4", "prompt": "Generate a cheerful young Uzbek man with bright, party-like energy. Make him talk in an excited, joyful manner. Let him say: 'Bayramni unutmaylik! Hamma kulib, raqs tushsin!'"},
+        {"name": "Bayramona #5", "prompt": "Animate an elderly Uzbek grandmother with loving, festive energy. Make her speak in a warm, happy tone — add soft giggles. Let her deliver: 'Hayrli kun, bolalar! Bayram quvonchi qalblarimizni to'ldirsin!'"}
+    ],
+    "emotional": [
+        {"name": "Emotional #1", "prompt": "Animate a middle-aged Uzbek man with deep emotional expression. Make him speak in a soft, heartfelt tone — add subtle frowns, gentle eyebrow furrows. Let him deliver: 'Voy, bolalar… ba'zan yurak shunchalik og'rishi mumkinki, so'z topolmay qolasiz…'"},
+        {"name": "Emotional #2", "prompt": "Bring to life an elderly Uzbek woman with touching, sorrowful energy. Make her talk in a tender, emotional manner. Let her say: 'Ah, bolalarim… sizni ko'rmaganimdan yuragim sog'inadi…'"},
+        {"name": "Emotional #3", "prompt": "Generate a young Uzbek man with a vulnerable, emotional presence. Make him speak in a gentle, reflective style. Let him deliver: 'Har bir lahza men uchun qimmat, lekin ba'zan yolg'izlik yuragimni siqadi…'"},
+        {"name": "Emotional #4", "prompt": "Animate a middle-aged Uzbek woman with profound emotional depth. Make her speak in a soft, moving tone. Let her say: 'Ah, eski kunlarni eslasam, ko'zlarim to'lib ketadi… qalbim titraydi…'"},
+        {"name": "Emotional #5", "prompt": "Bring to life an elderly Uzbek grandfather with a soulful, heartfelt expression. Make him speak in a warm, emotional tone. Let him deliver: 'Bolalarim, ba'zan hayot shuncha og'ir tuyuladi, lekin yuragimiz bardosh beradi…'"}
+    ],
+    "dramatic": [
+        {"name": "Dramatik #1", "prompt": "Animate a strong Uzbek man with intense, dramatic presence. Make him speak in a commanding, emotional tone — add sharp eyebrow furrows. Let him say: 'Bu so'zlar men uchun faqatgina gap emas — ular yuragimni titratadi!'"},
+        {"name": "Dramatik #2", "prompt": "Bring to life a middle-aged Uzbek woman with powerful dramatic energy. Make her speak in a deep, forceful tone. Let her say: 'Hayot shunchalik adolatsizki, yuragim dard bilan to'ladi…'"},
+        {"name": "Dramatik #3", "prompt": "Generate a young Uzbek man with fiery dramatic presence. Make him talk with strong emotional expression. Let him deliver: 'Men buni rad etolmayman… yuragim buning uchun kurashadi!'"},
+        {"name": "Dramatik #4", "prompt": "Animate an elderly Uzbek woman with intense dramatic flair. Make her speak in a heavy, moving tone. Let her say: 'Har bir qaror qalbimizni sinaydi, lekin biz to'xtamaymiz…'"},
+        {"name": "Dramatik #5", "prompt": "Bring to life a middle-aged Uzbek grandfather with commanding, emotional intensity. Make him talk in a forceful, heartfelt style. Let him deliver: 'Haqiqiy kuch yurakda yashaydi, so'zlar esa faqat bir qismidir!'"}
+    ],
+    "retro": [
+        {"name": "Retro #1", "prompt": "Animate a stylish middle-aged Uzbek man with a vintage, retro aura. Make him speak in a smooth, slightly nostalgic tone. Let him deliver: 'Ah, bolalar, eski davrlarning shirin ohangi qalbimni to'ldiradi…'"},
+        {"name": "Retro #2", "prompt": "Bring to life a retro-inspired Uzbek woman with playful, classic energy. Make her talk in a lively yet old-fashioned style. Let her say: 'Voy, o'sha kunlarning ohangi qancha zavq bag'ishlagan edi!'"},
+        {"name": "Retro #3", "prompt": "Generate a young Uzbek man with vintage charm and expressive retro style. Make him speak in a confident, cheerful tone. Let him deliver: 'Hayot o'sha davrdayam quvnoq edi, har bir lahza zavq bilan to'la!'"},
+        {"name": "Retro #4", "prompt": "Animate an elderly Uzbek grandfather with classic retro personality. Make him talk in a gentle, reminiscent tone. Let him say: 'O'tmishdagi har bir musiqiy ohang yuragimni titratadi…'"},
+        {"name": "Retro #5", "prompt": "Bring to life a middle-aged Uzbek woman with retro elegance and warmth. Make her speak in a smooth, lively style. Let her deliver: 'Ah, bolalar, o'sha davrning shirin lahzalari doimo yodimda qoladi!'"}
+    ],
+    "sentimental": [
+        {"name": "Sentimental #1", "prompt": "Animate a tender middle-aged Uzbek man with heartfelt, sentimental energy. Make him speak in a soft, warm tone. Let him deliver: 'Ah, bolalar, har bir lahza yuragimga chuqur kiradi va uni unutolmayman…'"},
+        {"name": "Sentimental #2", "prompt": "Bring to life a young Uzbek woman with soft, sentimental expression. Make her talk in a gentle, moving manner. Let her say: 'Har bir so'z, har bir qarash yuragimni titratadi…'"},
+        {"name": "Sentimental #3", "prompt": "Generate an elderly Uzbek grandfather with deep, emotional sentiment. Make him speak in a calm, warm tone. Let him deliver: 'Bolalarim, sizni ko'rganimda qalbim shodlanadi, lekin ozgina sog'inch ham bo'ladi…'"},
+        {"name": "Sentimental #4", "prompt": "Animate a middle-aged Uzbek woman with tender, sentimental energy. Make her talk in a soft, heartwarming tone. Let her say: 'Har bir qarash va so'z yuragimni to'ldiradi, sizni eslab turaman…'"},
+        {"name": "Sentimental #5", "prompt": "Bring to life a young Uzbek man with heartfelt, emotional presence. Make him speak in a warm, reflective tone. Let him deliver: 'Yuragim har doim siz bilan, bolalar, hatto uzoqda bo'lsak ham…'"}
+    ],
+    "party": [
+        {"name": "Party #1", "prompt": "Animate a young Uzbek man with vibrant, energetic party vibes. Make him speak in a lively, upbeat tone — add wide smiles, playful eyebrow pops. Let him deliver: 'Hay-hay, bolalar! Hamma birga raqs tushaylik va bayramni boshlaylik!'"},
+        {"name": "Party #2", "prompt": "Bring to life a middle-aged Uzbek woman with dynamic, joyful energy. Make her talk in a cheerful, energetic style. Let her say: 'Voy, bugun shunchalik quvnoq kun! Kelinglar, kulamiz va zavqlanamiz!'"},
+        {"name": "Party #3", "prompt": "Generate an elderly Uzbek grandfather with playful, youthful energy. Make him speak in a lively, engaging tone. Let him deliver: 'Eh, yoshlar! Men ham sizlar bilan raqs tushishga tayyorman!'"},
+        {"name": "Party #4", "prompt": "Animate a young Uzbek woman full of vibrant party energy. Make her talk in a fun, lively manner. Let her say: 'Kelinglar, bayramni unutmaymiz! Hamma birga zavqlanishga tayyor!'"},
+        {"name": "Party #5", "prompt": "Bring to life a middle-aged Uzbek man with cheerful, energetic vibe. Make him speak in an upbeat, dynamic tone. Let him deliver: 'Bugun faqat quvonch va kulgi bo'lsin! Hamma birga raqs tushaylik!'"}
+    ],
+    "soft_sad": [
+        {"name": "Soft Sad #1", "prompt": "Animate a middle-aged Uzbek man with gentle, melancholic expression. Make him speak in a soft, sorrowful tone. Let him deliver: 'Ah, bolalar, ba'zan yurak og'rishi shunchalik kuchli bo'ladi…'"},
+        {"name": "Soft Sad #2", "prompt": "Bring to life an elderly Uzbek woman with tender, sad energy. Make her talk in a calm, moving manner. Let her say: 'Voy, eski xotiralarni eslaganimda ko'zlarim to'lib ketadi…'"},
+        {"name": "Soft Sad #3", "prompt": "Generate a young Uzbek man with subtle, reflective sorrow. Make him speak in a soft, emotional tone. Let him deliver: 'Har bir lahza men uchun qimmat, lekin ba'zan yolg'izlik yuragimni og'ritadi…'"},
+        {"name": "Soft Sad #4", "prompt": "Animate a middle-aged Uzbek woman with soft, wistful expression. Make her talk in a gentle, moving style. Let her say: 'Ah, o'tmishni eslab, yuragim shirin va ozgina achchiq bo'ladi…'"},
+        {"name": "Soft Sad #5", "prompt": "Bring to life an elderly Uzbek grandfather with quiet, melancholic presence. Make him speak in a tender, reflective tone. Let him deliver: 'Bolalarim, hayot ba'zan og'ir bo'ladi, lekin yurak bardosh beradi…'"}
+    ],
+    "strong_dramatic": [
+        {"name": "Strong/Dramatic #1", "prompt": "Animate a middle-aged Uzbek man with commanding, intense presence. Make him speak in a powerful, dramatic tone. Let him deliver: 'Endi sabr qilish mumkin emas! Harakat qilish vaqti keldi!'"},
+        {"name": "Strong/Dramatic #2", "prompt": "Bring to life a young Uzbek woman with bold, dramatic energy. Make her talk in a forceful, emotional style. Let her say: 'Men bunga rozi bo'lmayman! Bu qaror faqat kuch bilan amalga oshadi!'"},
+        {"name": "Strong/Dramatic #3", "prompt": "Generate an elderly Uzbek grandfather with a resolute, dramatic aura. Make him speak in a strong, authoritative tone. Let him deliver: 'Hayotda faqat jasoratli yuraklar g'alaba qozonadi!'"},
+        {"name": "Strong/Dramatic #4", "prompt": "Animate a middle-aged Uzbek woman with intense, dramatic presence. Make her talk in a commanding, passionate tone. Let her say: 'Bu shunchaki so'z emas, bu qaror yurak bilan qabul qilindi!'"},
+        {"name": "Strong/Dramatic #5", "prompt": "Bring to life a young Uzbek man with fiery, dramatic energy. Make him speak in a powerful, passionate style. Let him deliver: 'Hozirgi lahza har birimiz uchun sinov, lekin biz bardosh beramiz!'"}
+    ],
+    "boss_confident": [
+        {"name": "Boss #1", "prompt": "Animate a confident middle-aged Uzbek man with commanding presence. Make him speak in a firm, authoritative tone. Let him deliver: 'Bolalar, qaror men tomondan qabul qilindi — ishonch bilan harakat qilamiz!'"},
+        {"name": "Boss #2", "prompt": "Bring to life a young Uzbek woman exuding leadership and confidence. Make her talk in a poised, assertive style. Let her say: 'Hamma diqqat bilan tinglasin! Bu ish bizning qo'limizda va muvaffaqiyatga erishamiz!'"},
+        {"name": "Boss #3", "prompt": "Generate an elderly Uzbek grandfather with confident, commanding aura. Make him speak in a calm, authoritative tone. Let him deliver: 'Har bir qarorimiz qat'iy va aniq bo'ladi — ishonch bilan oldinga!'"},
+        {"name": "Boss #4", "prompt": "Animate a middle-aged Uzbek woman with poised, confident presence. Make her talk in a steady, commanding tone. Let her say: 'Bugungi rejalar aniq va biz ularni amalga oshiramiz — shubhasiz!'"},
+        {"name": "Boss #5", "prompt": "Bring to life a young Uzbek man with bold, confident energy. Make him speak in a strong, decisive style. Let him deliver: 'Ishimiz muvaffaqiyatli bo'ladi, chunki har bir qadamimiz aniq va qat'iy!'"}
+    ]
+}
+
+# ============================================================
 # 📊 BARCHA PROMPTS - ALL_PROMPTS (YANGI + ESKI)
 # ============================================================
 # Eski prompts + Yangi comedy prompts birgalikda random tanlash
@@ -1089,10 +1173,19 @@ ALL_PROMPTS = COMEDY_PROMPTS + [
     }
 ]
 
-# Random tanlash uchun helper function
+# Random tanlash uchun helper functions
 def get_random_prompt():
     """Random prompt tanlash - YANGI + ESKI"""
     return random.choice(ALL_PROMPTS)
+
+def get_random_category_prompts(category: str, count: int = 5):
+    """Kategoriyadan random N ta prompt tanlash"""
+    if category not in CATEGORY_PROMPTS:
+        return []
+    
+    prompts = CATEGORY_PROMPTS[category]
+    selected = random.sample(prompts, min(count, len(prompts)))
+    return selected
 
 # 10 ta yangi emotsional promtlar (ZAHIRA sifatida saqlanadi)
 VIDEO_PROMPTS_BACKUP = [
@@ -1569,10 +1662,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_bytes = analyzer.enhance_old_photo(image_bytes)
             logger.info(f"✨ Old photo enhanced for user {user.id}")
         
-        # COMEDY SHABLONI QO'SHMA QILISH - RANDOM SELECT (YANGI + ESKI)
+        # TEMPLATE VA KATEGORIYA TANLASH
         selected_template = context.user_data.get('selected_template', 'auto')
+        selected_category = context.user_data.get('selected_category', None)
         
-        if selected_template == 'comedy':
+        if selected_category:
+            # KATEGORIYA MODE - 5ta random prompt tanlash
+            category_prompts = get_random_category_prompts(selected_category, 5)
+            if category_prompts:
+                selected_style = random.choice(category_prompts)
+                logger.info(f"🎭 CATEGORY MODE: User {user.id} - Category: {selected_category}, Prompt: {selected_style['name']}")
+            else:
+                selected_style = analyzer.generate_uzbek_prompt(analysis)
+        elif selected_template == 'comedy':
             # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
             selected_style = get_random_prompt()
             logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
@@ -2042,31 +2144,135 @@ async def template_trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================
-# 📁 KATEGORIYA MENYU - CATEGORY MENU (COMING SOON)
+# 📁 KATEGORIYA MENYU - CATEGORY MENU
 # ==========================================
 async def category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """📁 Kategoriya boyicha video - Coming Soon"""
+    """📁 Kategoriya boyicha video"""
     query = update.callback_query
     await query.answer()
     
+    # Kategoriya tugmalari
     keyboard = [
-        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+        [
+            InlineKeyboardButton("😂 KULGILI", callback_data="cat_funny"),
+            InlineKeyboardButton("👴 NOSTALGIK", callback_data="cat_nostalgic")
+        ],
+        [
+            InlineKeyboardButton("🎉 BAYRAMONA", callback_data="cat_festive"),
+            InlineKeyboardButton("😢 EMOTSIONAL", callback_data="cat_emotional")
+        ],
+        [
+            InlineKeyboardButton("🔥 DRAMATIK", callback_data="cat_dramatic"),
+            InlineKeyboardButton("🕰 RETRO", callback_data="cat_retro")
+        ],
+        [
+            InlineKeyboardButton("❤️ SENTIMENTAL", callback_data="cat_sentimental"),
+            InlineKeyboardButton("🥳 PARTY", callback_data="cat_party")
+        ],
+        [
+            InlineKeyboardButton("😔 SOG'INCH", callback_data="cat_soft_sad"),
+            InlineKeyboardButton("💥 KUCHLI", callback_data="cat_strong_dramatic")
+        ],
+        [
+            InlineKeyboardButton("💼 BOSS", callback_data="cat_boss_confident")
+        ],
+        [
+            InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")
+        ]
     ]
     
     await query.edit_message_text(
         text="📁 <b>KATEGORIYA BOYICHA VIDEO</b>\n\n"
-             "🎉 <b>Tez kunda chiqadi!</b>\n\n"
-             "Ushbu funktsiya yakinda ishga tushuriladi:\n\n"
-             "🎬 <b>Kategoriyalar:</b>\n"
-             "• 🎭 Drama\n"
-             "• 😂 Comedy\n"
-             "• 💕 Romantic\n"
-             "• 🎨 Creative\n"
-             "• 🎓 Educational\n"
-             "• 🏆 Motivational\n\n"
-             "Har kategoriya uchun maxsus prompt va video!\n\n"
-             "<b>Kuting...</b> ⏳",
+             "🎬 <b>Kategoriyani Tanlang:</b>\n\n"
+             "Har kategoriyada 5 ta unique prompt!\n"
+             "Rasmingizni yuborsangiz, 5ta random prompt ishlatiladi!\n\n"
+             "✨ <b>11 KATEGORIYA - 55+ PROMPT!</b>",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+# KATEGORIYA CALLBACKS
+async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, category: str):
+    """Kategoriya tanlash va rasm soroq"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['selected_category'] = category
+    
+    # Kategoriya nomini olish
+    category_names = {
+        "funny": "😂 KULGILI",
+        "nostalgic": "👴 NOSTALGIK",
+        "festive": "🎉 BAYRAMONA",
+        "emotional": "😢 EMOTSIONAL",
+        "dramatic": "🔥 DRAMATIK",
+        "retro": "🕰 RETRO",
+        "sentimental": "❤️ SENTIMENTAL",
+        "party": "🥳 PARTY",
+        "soft_sad": "😔 SOG'INCH",
+        "strong_dramatic": "💥 KUCHLI",
+        "boss_confident": "💼 BOSS"
+    }
+    
+    keyboard = [
+        [InlineKeyboardButton("📸 Rasm Yuboring", callback_data="cat_upload_photo")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="category_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text=f"<b>{category_names.get(category, category)}</b>\n\n"
+             "Bu kategoriyada 5 ta unique prompt!\n"
+             "Rasm yuborsa, random 5ta prompt ishlatiladi!\n\n"
+             "📸 <b>Rasm yuboringmi?</b>",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+# Category callback wrappers
+async def cat_funny(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "funny")
+
+async def cat_nostalgic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "nostalgic")
+
+async def cat_festive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "festive")
+
+async def cat_emotional(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "emotional")
+
+async def cat_dramatic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "dramatic")
+
+async def cat_retro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "retro")
+
+async def cat_sentimental(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "sentimental")
+
+async def cat_party(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "party")
+
+async def cat_soft_sad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "soft_sad")
+
+async def cat_strong_dramatic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "strong_dramatic")
+
+async def cat_boss_confident(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await category_selected(update, context, "boss_confident")
+
+async def cat_upload_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Kategoriya bo'yicha rasm yuborishni soroq"""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.edit_message_text(
+        text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+             "Pastdagi chat'ga rasmni yuboring,\n"
+             "AI 5ta random prompt ishlatib video yaratadi!",
         parse_mode="HTML"
     )
 
@@ -2440,6 +2646,20 @@ def main():
         # MENYU CALLBACK HANDLERS
         application.add_handler(CallbackQueryHandler(templates_menu, pattern="^templates_menu$"))
         application.add_handler(CallbackQueryHandler(category_menu, pattern="^category_menu$"))
+        
+        # KATEGORIYA CALLBACKS
+        application.add_handler(CallbackQueryHandler(cat_funny, pattern="^cat_funny$"))
+        application.add_handler(CallbackQueryHandler(cat_nostalgic, pattern="^cat_nostalgic$"))
+        application.add_handler(CallbackQueryHandler(cat_festive, pattern="^cat_festive$"))
+        application.add_handler(CallbackQueryHandler(cat_emotional, pattern="^cat_emotional$"))
+        application.add_handler(CallbackQueryHandler(cat_dramatic, pattern="^cat_dramatic$"))
+        application.add_handler(CallbackQueryHandler(cat_retro, pattern="^cat_retro$"))
+        application.add_handler(CallbackQueryHandler(cat_sentimental, pattern="^cat_sentimental$"))
+        application.add_handler(CallbackQueryHandler(cat_party, pattern="^cat_party$"))
+        application.add_handler(CallbackQueryHandler(cat_soft_sad, pattern="^cat_soft_sad$"))
+        application.add_handler(CallbackQueryHandler(cat_strong_dramatic, pattern="^cat_strong_dramatic$"))
+        application.add_handler(CallbackQueryHandler(cat_boss_confident, pattern="^cat_boss_confident$"))
+        application.add_handler(CallbackQueryHandler(cat_upload_photo, pattern="^cat_upload_photo$"))
         application.add_handler(CallbackQueryHandler(template_love, pattern="^template_love$"))
         application.add_handler(CallbackQueryHandler(template_holiday, pattern="^template_holiday$"))
         application.add_handler(CallbackQueryHandler(template_family, pattern="^template_family$"))
