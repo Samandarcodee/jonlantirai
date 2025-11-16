@@ -2054,19 +2054,33 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Broadcast xabarini barcha userlarga yuborish"""
-    if not context.user_data.get('waiting_for_broadcast'):
+    user = update.effective_user
+    
+    # Tekshirish 1: Admin mi?
+    if user.id not in ADMIN_IDS:
         return
     
-    if not update.effective_user.id in ADMIN_IDS:
+    # Tekshirish 2: broadcast mode'da mi?
+    if not context.user_data.get('waiting_for_broadcast'):
         return
     
     message_text = update.message.text
     
+    # Loading message
+    wait_msg = await update.message.reply_text(
+        "📨 <b>XABAR YUBORILMOQDA...</b>\n\n"
+        "⏳ Iltimos, kuting...",
+        parse_mode='HTML'
+    )
+    
     # Barcha userlarga xabar yuborish
     success_count = 0
     error_count = 0
+    blocked_count = 0
     
-    for user_id in user_db.data.keys():
+    total_users = len(user_db.data)
+    
+    for user_id in list(user_db.data.keys()):
         try:
             await context.bot.send_message(
                 chat_id=int(user_id),
@@ -2075,19 +2089,28 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
             )
             success_count += 1
         except Exception as e:
-            error_count += 1
+            error_str = str(e)
+            if "blocked" in error_str.lower() or "403" in error_str:
+                blocked_count += 1
+            else:
+                error_count += 1
             logger.error(f"Broadcast error for user {user_id}: {e}")
     
     # Admin'ga result
     result_text = (
-        f"✅ <b>BROADCAST TUGALLANDI</b>\n\n"
+        f"✅ <b>BROADCAST TUGALLANDI!</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
         f"✅ Muvaffaqiyatli: <b>{success_count}</b>\n"
-        f"❌ Xato: <b>{error_count}</b>\n\n"
-        f"🎯 Jami: <b>{success_count + error_count}</b>"
+        f"❌ Xato: <b>{error_count}</b>\n"
+        f"🚫 Blok qilgan: <b>{blocked_count}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📊 Jami: <b>{total_users}</b>"
     )
     
-    await update.message.reply_text(result_text, parse_mode='HTML')
+    await wait_msg.edit_text(result_text, parse_mode='HTML')
     context.user_data['waiting_for_broadcast'] = False
+    
+    logger.info(f"✅ BROADCAST: Success={success_count}, Error={error_count}, Blocked={blocked_count}")
 
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2831,9 +2854,12 @@ def main():
         # Photo va text handlers
         application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         
-        # BROADCAST MESSAGE HANDLER
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        # TEXT MESSAGE HANDLERS - GROUP 0: Broadcast first (higher priority)
+        # Group 0 = Broadcast handler (only admin, only when waiting)
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast_message), group=0)
+        
+        # Group 1 = Regular messages
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message), group=1)
         
         # Error handler
         application.add_error_handler(error_handler)
