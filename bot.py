@@ -1908,7 +1908,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin panel - faqat adminlar uchun"""
+    """Admin panel - faqat adminlar uchun - TOLIQ XATO HIMOYASI"""
     user = update.effective_user
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
@@ -1924,64 +1924,89 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Statistikani olish
         stats = user_db.get_all_stats()
+        if not stats:
+            stats = {'total_users': 0, 'total_videos': 0, 'active_today': 0}
+        
+        # Eng faol foydalanuvchilar - SAFE SORTING
+        try:
+            top_users = sorted(
+                user_db.data.items(),
+                key=lambda x: x[1].get('videos_created', 0) if isinstance(x[1], dict) else 0,
+                reverse=True
+            )[:10]
+        except Exception as sort_error:
+            logger.warning(f"Sorting error: {sort_error}")
+            top_users = list(user_db.data.items())[:10]
+        
+        # Admin text - MAX 4000 CHARACTER (Telegram limit 4096)
+        admin_text = (
+            "┏━━━━━━━━━━━━━━━━━┓\n"
+            "┃ 👑 **ADMIN** 👑 ┃\n"
+            "┗━━━━━━━━━━━━━━━━━┛\n\n"
+            
+            f"👥 Userlar: **{stats.get('total_users', 0)}**\n"
+            f"🎬 Videolar: **{stats.get('total_videos', 0)}**\n"
+            f"✅ Bugun: **{stats.get('active_today', 0)}**\n\n"
+            
+            "🏆 **TOP 10:**\n"
+        )
+        
+        # User list qo'shish - SAFE
+        for i, (user_id, user_data) in enumerate(top_users, 1):
+            try:
+                if not isinstance(user_data, dict):
+                    continue
+                    
+                username = user_data.get('username', None)
+                first_name = user_data.get('first_name', 'Noma\'lum')
+                videos = user_data.get('videos_created', 0)
+                
+                # Username yoki ID ko'rsatish
+                if username and isinstance(username, str) and username.strip():
+                    user_display = f"@{username}"
+                else:
+                    user_display = f"ID: {str(user_id)[:8]}"
+                
+                admin_text += f"{i}. {first_name} ({user_display}) - {videos} video\n"
+            except Exception as user_error:
+                logger.error(f"User {user_id} display error: {user_error}")
+                continue
+        
+        admin_text += (
+            "\n━━━━━━━━━━━━━━━━━━\n"
+            "🤖 @Jonlantir_Ai_bot\n"
+            "━━━━━━━━━━━━━━━━━━"
+        )
+        
+        # MESSAGE LENGTH CHECK
+        if len(admin_text) > 4000:
+            admin_text = admin_text[:3900] + "\n\n... va yana ko'proq"
+        
+        # ADMIN MENYU TUGMALARI
+        keyboard = [
+            [
+                InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
+                InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
+            ],
+            [
+                InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
+            ]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
+        
     except Exception as e:
-        logger.error(f"Admin panel error: {e}")
+        logger.error(f"❌ ADMIN PANEL CRITICAL ERROR: {e}", exc_info=True)
         await update.message.reply_text(
-            "❌ **Xatolik!**\n\n"
-            "Admin panel yuklanmadi.\n"
-            "Iltimos, qayta urinib ko'ring.",
+            "❌ **Admin Panel Xatosi**\n\n"
+            "Vaqtinchalik muammo. Iltimos:\n"
+            "1. Qayta `/admin` bosing\n"
+            "2. Bot owner bilan bog'lanish\n\n"
+            "Error logged",
             parse_mode='Markdown'
         )
         return
-    
-    # Eng faol foydalanuvchilar
-    top_users = sorted(
-        user_db.data.items(),
-        key=lambda x: x[1].get('videos_created', 0),
-        reverse=True
-    )[:10]
-    
-    admin_text = (
-        "┏━━━━━━━━━━━━━━━━━┓\n"
-        "┃ 👑 **ADMIN** 👑 ┃\n"
-        "┗━━━━━━━━━━━━━━━━━┛\n\n"
-        
-        f"👥 Userlar: **{stats['total_users']}**\n"
-        f"🎬 Videolar: **{stats['total_videos']}**\n"
-        f"✅ Bugun: **{stats['active_today']}**\n\n"
-        
-        "🏆 **TOP 10:**\n"
-    )
-    
-    for i, (user_id, user_data) in enumerate(top_users, 1):
-        username = user_data.get('username') or 'username_yoq'
-        first_name = user_data.get('first_name', 'Noma\'lum')
-        videos = user_data.get('videos_created', 0)
-        
-        if username and username != 'username_yoq':
-            admin_text += f"{i}. {first_name} (@{username}) - {videos} video\n"
-        else:
-            admin_text += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
-    
-    admin_text += (
-        "\n━━━━━━━━━━━━━━━━━━\n"
-        "🤖 @Jonlantir_Ai_bot\n"
-        "━━━━━━━━━━━━━━━━━━"
-    )
-    
-    # ADMIN MENYU TUGMALARI
-    keyboard = [
-        [
-            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
-            InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
-        ],
-        [
-            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
-        ]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
 
 
 # ==========================================
