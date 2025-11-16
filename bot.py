@@ -1950,21 +1950,21 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             top_users = list(user_db.data.items())[:10]
             logger.info(f"📊 ADMIN: Using fallback {len(top_users)} users")
         
-        # Admin text - HTML MODE (Markdown broke with special chars!)
-        # Using HTML to avoid markdown parsing errors
+        # Admin text - PLAIN TEXT MODE (No formatting, no parsing errors!)
+        # Safest approach: Use plain text with no special markup
         admin_text = (
             "┏━━━━━━━━━━━━━━━━━┓\n"
-            "┃ 👑 <b>ADMIN</b> 👑 ┃\n"
+            "┃ 👑 ADMIN 👑 ┃\n"
             "┗━━━━━━━━━━━━━━━━━┛\n\n"
             
-            f"👥 Userlar: <b>{stats.get('total_users', 0)}</b>\n"
-            f"🎬 Videolar: <b>{stats.get('total_videos', 0)}</b>\n"
-            f"✅ Bugun: <b>{stats.get('active_today', 0)}</b>\n\n"
+            f"👥 Userlar: {stats.get('total_users', 0)}\n"
+            f"🎬 Videolar: {stats.get('total_videos', 0)}\n"
+            f"✅ Bugun: {stats.get('active_today', 0)}\n\n"
             
-            "🏆 <b>TOP 10:</b>\n"
+            "🏆 TOP 10:\n"
         )
         
-        # User list qo'shish - SAFE + ESCAPE HTML
+        # User list qo'shish - SAFE + PLAIN TEXT
         logger.info(f"📊 ADMIN: Processing {len(top_users)} users for display")
         users_added = 0
         for i, (user_id, user_data) in enumerate(top_users, 1):
@@ -1977,10 +1977,9 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 first_name = user_data.get('first_name', 'Noma\'lum')
                 videos = user_data.get('videos_created', 0)
                 
-                # HTML escape special characters
-                first_name = first_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                if username:
-                    username = username.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                # NO special character escaping needed for plain text!
+                # Just ensure they're strings
+                first_name = str(first_name)[:30] if first_name else 'Noma\'lum'
                 
                 # Username yoki ID ko'rsatish
                 if username and isinstance(username, str) and username.strip():
@@ -2022,10 +2021,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
         
-        logger.info(f"📊 ADMIN: Sending admin panel message with HTML parsing")
+        logger.info(f"📊 ADMIN: Sending admin panel message - PLAIN TEXT mode")
         reply_markup = InlineKeyboardMarkup(keyboard)
-        # CHANGED: Markdown → HTML to fix parsing issues
-        await update.message.reply_text(admin_text, parse_mode='HTML', reply_markup=reply_markup)
+        # CHANGED: HTML → PLAIN TEXT (None) to completely avoid parsing errors
+        await update.message.reply_text(admin_text, reply_markup=reply_markup)
         logger.info(f"✅ ADMIN: Admin panel sent successfully")
         
     except Exception as e:
