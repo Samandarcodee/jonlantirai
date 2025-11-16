@@ -1922,21 +1922,33 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
+        # DEBUG: Step 1
+        logger.info(f"📊 ADMIN: User {user.id} accessing admin panel")
+        
         # Statistikani olish
+        logger.info(f"📊 ADMIN: Getting stats...")
         stats = user_db.get_all_stats()
+        logger.info(f"📊 ADMIN: Stats retrieved - Users: {stats}")
+        
         if not stats:
+            logger.warning("📊 ADMIN: Stats is None, using defaults")
             stats = {'total_users': 0, 'total_videos': 0, 'active_today': 0}
         
+        logger.info(f"📊 ADMIN: Database has {len(user_db.data)} users")
+        
         # Eng faol foydalanuvchilar - SAFE SORTING
+        logger.info(f"📊 ADMIN: Sorting top users...")
         try:
             top_users = sorted(
                 user_db.data.items(),
                 key=lambda x: x[1].get('videos_created', 0) if isinstance(x[1], dict) else 0,
                 reverse=True
             )[:10]
+            logger.info(f"📊 ADMIN: Sorted {len(top_users)} top users")
         except Exception as sort_error:
-            logger.warning(f"Sorting error: {sort_error}")
+            logger.warning(f"📊 ADMIN: Sorting error: {sort_error}")
             top_users = list(user_db.data.items())[:10]
+            logger.info(f"📊 ADMIN: Using fallback {len(top_users)} users")
         
         # Admin text - MAX 4000 CHARACTER (Telegram limit 4096)
         admin_text = (
@@ -1952,9 +1964,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         # User list qo'shish - SAFE
+        logger.info(f"📊 ADMIN: Processing {len(top_users)} users for display")
         for i, (user_id, user_data) in enumerate(top_users, 1):
             try:
                 if not isinstance(user_data, dict):
+                    logger.warning(f"📊 ADMIN: User {user_id} data is not dict: {type(user_data)}")
                     continue
                     
                 username = user_data.get('username', None)
@@ -1967,9 +1981,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     user_display = f"ID: {str(user_id)[:8]}"
                 
-                admin_text += f"{i}. {first_name} ({user_display}) - {videos} video\n"
+                line = f"{i}. {first_name} ({user_display}) - {videos} video\n"
+                admin_text += line
+                logger.debug(f"📊 ADMIN: Added user {i}: {first_name}")
             except Exception as user_error:
-                logger.error(f"User {user_id} display error: {user_error}")
+                logger.error(f"📊 ADMIN: User {user_id} display error: {user_error}")
                 continue
         
         admin_text += (
@@ -1979,10 +1995,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         # MESSAGE LENGTH CHECK
+        logger.info(f"📊 ADMIN: Message length: {len(admin_text)} chars")
         if len(admin_text) > 4000:
+            logger.warning(f"📊 ADMIN: Message too long, truncating")
             admin_text = admin_text[:3900] + "\n\n... va yana ko'proq"
         
         # ADMIN MENYU TUGMALARI
+        logger.info(f"📊 ADMIN: Creating keyboard buttons")
         keyboard = [
             [
                 InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
@@ -1993,19 +2012,28 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
         ]
         
+        logger.info(f"📊 ADMIN: Sending admin panel message")
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(admin_text, parse_mode='Markdown', reply_markup=reply_markup)
+        logger.info(f"✅ ADMIN: Admin panel sent successfully")
         
     except Exception as e:
-        logger.error(f"❌ ADMIN PANEL CRITICAL ERROR: {e}", exc_info=True)
-        await update.message.reply_text(
-            "❌ **Admin Panel Xatosi**\n\n"
-            "Vaqtinchalik muammo. Iltimos:\n"
+        error_msg = str(e)
+        error_type = type(e).__name__
+        logger.error(f"❌ ADMIN PANEL ERROR - Type: {error_type}, Message: {error_msg}", exc_info=True)
+        
+        # Detailed debug message for admin
+        debug_text = (
+            f"❌ **Admin Panel Xatosi**\n\n"
+            f"**Xato Turi:** `{error_type}`\n"
+            f"**Xato:** `{error_msg[:100]}`\n\n"
+            "Yechim:\n"
             "1. Qayta `/admin` bosing\n"
-            "2. Bot owner bilan bog'lanish\n\n"
-            "Error logged",
-            parse_mode='Markdown'
+            "2. Logs'da full error ko'rish\n\n"
+            "Status: Error logged for debugging"
         )
+        
+        await update.message.reply_text(debug_text, parse_mode='Markdown')
         return
 
 
