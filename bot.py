@@ -136,7 +136,7 @@ class UserDatabase:
     def get_all_stats(self):
         """Get overall statistics"""
         total_users = len(self.data)
-        total_videos = sum(user['videos_created'] for user in self.data.values())
+        total_videos = sum(user.get('videos_created', 0) for user in self.data.values())
         active_today = sum(1 for user in self.data.values() 
                           if time.time() - user.get('last_video_time', 0) < 86400)
         return {
@@ -1921,8 +1921,18 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Statistikani olish
-    stats = user_db.get_all_stats()
+    try:
+        # Statistikani olish
+        stats = user_db.get_all_stats()
+    except Exception as e:
+        logger.error(f"Admin panel error: {e}")
+        await update.message.reply_text(
+            "❌ **Xatolik!**\n\n"
+            "Admin panel yuklanmadi.\n"
+            "Iltimos, qayta urinib ko'ring.",
+            parse_mode='Markdown'
+        )
+        return
     
     # Eng faol foydalanuvchilar
     top_users = sorted(
