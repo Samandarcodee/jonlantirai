@@ -1460,7 +1460,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
         ],
         [
-            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu"),
+            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu"),
+            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
+        ],
+        [
             InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
         ]
     ]
@@ -2038,6 +2041,36 @@ async def template_trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ==========================================
+# 📁 KATEGORIYA MENYU - CATEGORY MENU (COMING SOON)
+# ==========================================
+async def category_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """📁 Kategoriya boyicha video - Coming Soon"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="📁 <b>KATEGORIYA BOYICHA VIDEO</b>\n\n"
+             "🎉 <b>Tez kunda chiqadi!</b>\n\n"
+             "Ushbu funktsiya yakinda ishga tushuriladi:\n\n"
+             "🎬 <b>Kategoriyalar:</b>\n"
+             "• 🎭 Drama\n"
+             "• 😂 Comedy\n"
+             "• 💕 Romantic\n"
+             "• 🎨 Creative\n"
+             "• 🎓 Educational\n"
+             "• 🏆 Motivational\n\n"
+             "Har kategoriya uchun maxsus prompt va video!\n\n"
+             "<b>Kuting...</b> ⏳",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
 async def template_comedy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """🎭 COMEDY SHABLONI - Random kulgili video (YANGI + ESKI)"""
     query = update.callback_query
@@ -2257,7 +2290,10 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
         ],
         [
-            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu"),
+            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu"),
+            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
+        ],
+        [
             InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
         ]
     ]
@@ -2403,6 +2439,7 @@ def main():
         
         # MENYU CALLBACK HANDLERS
         application.add_handler(CallbackQueryHandler(templates_menu, pattern="^templates_menu$"))
+        application.add_handler(CallbackQueryHandler(category_menu, pattern="^category_menu$"))
         application.add_handler(CallbackQueryHandler(template_love, pattern="^template_love$"))
         application.add_handler(CallbackQueryHandler(template_holiday, pattern="^template_holiday$"))
         application.add_handler(CallbackQueryHandler(template_family, pattern="^template_family$"))
