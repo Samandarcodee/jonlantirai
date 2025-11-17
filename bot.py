@@ -120,6 +120,12 @@ class UserDatabase:
             if user_id_str not in self.data:
                 return True, 0
             
+            # Eski userlar uchun VIP fieldlarini qo'shish
+            if 'vip_period_start' not in self.data[user_id_str]:
+                self.data[user_id_str]['vip_period_start'] = 0
+                self.data[user_id_str]['vip_videos_in_period'] = 0
+                self.save_db()
+            
             # Yangi 6 soatlik davrni boshlash kerakmi?
             period_start = self.data[user_id_str].get('vip_period_start', 0)
             time_since_period_start = time.time() - period_start
@@ -163,6 +169,11 @@ class UserDatabase:
             
             # VIP userlar uchun maxsus tracking
             if user_id in VIP_USERS:
+                # Eski userlar uchun VIP fieldlarini qo'shish
+                if 'vip_period_start' not in self.data[user_id_str]:
+                    self.data[user_id_str]['vip_period_start'] = 0
+                    self.data[user_id_str]['vip_videos_in_period'] = 0
+                
                 period_start = self.data[user_id_str].get('vip_period_start', 0)
                 time_since_period_start = current_time - period_start
                 
