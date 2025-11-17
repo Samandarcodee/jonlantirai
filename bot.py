@@ -1953,11 +1953,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🏆 TOP 10:\n"
         )
         
-        # Add users to display
-        for i, (user_id, user_data) in enumerate(top_users, 1):
+        # Add users to display - Fixed enumeration
+        user_count = 0
+        for user_id, user_data in top_users:
             if not isinstance(user_data, dict):
                 continue
             
+            user_count += 1
             username = user_data.get('username')
             first_name = str(user_data.get('first_name', 'Noma\'lum'))[:30]
             videos = user_data.get('videos_created', 0)
@@ -1965,7 +1967,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Display username or ID
             user_display = f"@{username}" if (username and isinstance(username, str) and username.strip()) else f"ID: {str(user_id)[:8]}"
             
-            admin_text += f"{i}. {first_name} ({user_display}) - {videos} video\n"
+            admin_text += f"{user_count}. {first_name} ({user_display}) - {videos} video\n"
         
         admin_text += (
             "\n━━━━━━━━━━━━━━━━━━\n"
