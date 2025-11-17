@@ -112,16 +112,20 @@ class UserDatabase:
         """Check if user can create video (6 hour cooldown)"""
         # Admin has no limits
         if user_id in ADMIN_IDS:
+            logger.info(f"🔓 User {user_id} is ADMIN - no limits")
             return True, 0
         
         # VIP users - 5 videos per 6 hours
         if user_id in VIP_USERS:
+            logger.info(f"⭐ User {user_id} is VIP - checking limit (5 videos per 6 hours)")
             user_id_str = str(user_id)
             if user_id_str not in self.data:
+                logger.info(f"⭐ VIP user {user_id} not in database yet - allowing")
                 return True, 0
             
             # Eski userlar uchun VIP fieldlarini qo'shish
             if 'vip_period_start' not in self.data[user_id_str]:
+                logger.info(f"⭐ VIP user {user_id} - adding VIP fields to existing user")
                 self.data[user_id_str]['vip_period_start'] = 0
                 self.data[user_id_str]['vip_videos_in_period'] = 0
                 self.save_db()
@@ -132,16 +136,22 @@ class UserDatabase:
             
             # Agar 6 soat o'tgan bo'lsa, yangi davr boshlash
             if time_since_period_start >= VIDEO_COOLDOWN_SECONDS or period_start == 0:
+                logger.info(f"⭐ VIP user {user_id} - new period starting or first video - allowing")
                 return True, 0
             
             # Joriy davrda nechta video yaratilgan?
             videos_in_period = self.data[user_id_str].get('vip_videos_in_period', 0)
+            logger.info(f"⭐ VIP user {user_id} - videos in current period: {videos_in_period}/{VIP_VIDEO_LIMIT}")
             
             if videos_in_period < VIP_VIDEO_LIMIT:
+                logger.info(f"⭐ VIP user {user_id} - can create video ({videos_in_period + 1}/{VIP_VIDEO_LIMIT})")
                 return True, 0
             else:
                 # 5 ta video limitiga yetgan, keyingi davr boshlanishini kuting
                 time_left = VIDEO_COOLDOWN_SECONDS - time_since_period_start
+                hours_left = int(time_left // 3600)
+                minutes_left = int((time_left % 3600) // 60)
+                logger.info(f"⭐ VIP user {user_id} - limit reached (5/5) - wait {hours_left}h {minutes_left}m")
                 return False, time_left
         
         # Regular users - 1 video per 6 hours
@@ -169,6 +179,7 @@ class UserDatabase:
             
             # VIP userlar uchun maxsus tracking
             if user_id in VIP_USERS:
+                logger.info(f"⭐ Recording VIP user {user_id} video creation")
                 # Eski userlar uchun VIP fieldlarini qo'shish
                 if 'vip_period_start' not in self.data[user_id_str]:
                     self.data[user_id_str]['vip_period_start'] = 0
@@ -181,9 +192,12 @@ class UserDatabase:
                 if time_since_period_start >= VIDEO_COOLDOWN_SECONDS or period_start == 0:
                     self.data[user_id_str]['vip_period_start'] = current_time
                     self.data[user_id_str]['vip_videos_in_period'] = 1
+                    logger.info(f"⭐ VIP user {user_id} - NEW PERIOD started, videos: 1/{VIP_VIDEO_LIMIT}")
                 else:
                     # Joriy davrga video qo'shish
                     self.data[user_id_str]['vip_videos_in_period'] += 1
+                    videos_count = self.data[user_id_str]['vip_videos_in_period']
+                    logger.info(f"⭐ VIP user {user_id} - video recorded, videos in period: {videos_count}/{VIP_VIDEO_LIMIT}")
             
             self.save_db()
     
