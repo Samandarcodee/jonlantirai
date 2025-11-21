@@ -130,6 +130,16 @@ class UserDatabase:
             self.data[user_id_str]['total_requests'] += 1
             self.save_db()
     
+    def increment_user_stat(self, user_id, stat_name):
+        """Increment a user statistic"""
+        user_id_str = str(user_id)
+        if user_id_str in self.data:
+            if stat_name not in self.data[user_id_str]:
+                self.data[user_id_str][stat_name] = 0
+            self.data[user_id_str][stat_name] += 1
+            self.data[user_id_str]['total_requests'] += 1
+            self.save_db()
+    
     def get_user_stats(self, user_id):
         """Get user statistics"""
         user_id_str = str(user_id)
@@ -1511,6 +1521,205 @@ class GoogleVeoVideoGenerator:
         return None
 
 
+# Image Generation API Configuration
+STABILITY_API_KEY = os.getenv('STABILITY_API_KEY', '')
+IMAGE_API_URL = os.getenv('IMAGE_API_URL', 'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image')
+
+
+class ImageGenerator:
+    """Rasm yaratish funksiyasi - Text to Image"""
+    def __init__(self, api_key=None, api_url=None):
+        self.api_key = api_key or STABILITY_API_KEY
+        self.api_url = api_url or IMAGE_API_URL
+    
+    def generate_image(self, prompt, width=1024, height=1024):
+        """
+        Matn orqali rasm yaratish
+        Returns: (success, image_bytes or error_message)
+        """
+        try:
+            if not self.api_key:
+                # Agar API key bo'lmasa, alternative API ishlatamiz
+                return self._generate_with_alternative_api(prompt, width, height)
+            
+            headers = {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {self.api_key}"
+            }
+            
+            body = {
+                "steps": 40,
+                "width": width,
+                "height": height,
+                "seed": 0,
+                "cfg_scale": 7,
+                "samples": 1,
+                "text_prompts": [
+                    {
+                        "text": prompt,
+                        "weight": 1
+                    }
+                ],
+            }
+            
+            session = requests.Session()
+            session.trust_env = False
+            response = session.post(
+                self.api_url,
+                headers=headers,
+                json=body,
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'artifacts' in data and len(data['artifacts']) > 0:
+                    image_base64 = data['artifacts'][0]['base64']
+                    image_bytes = base64.b64decode(image_base64)
+                    logger.info(f"✅ Image generated successfully: {len(image_bytes)} bytes")
+                    return True, image_bytes
+                else:
+                    return False, "Rasm yaratilmadi. API javob bermadi."
+            else:
+                error_msg = f"API xatosi: {response.status_code}"
+                logger.error(f"❌ {error_msg}")
+                # Alternative API ga o'tish
+                return self._generate_with_alternative_api(prompt, width, height)
+                
+        except Exception as e:
+            logger.error(f"Error generating image: {e}")
+            # Alternative API ga o'tish
+            return self._generate_with_alternative_api(prompt, width, height)
+    
+    def _generate_with_alternative_api(self, prompt, width, height):
+        """Alternative API - Hugging Face yoki boshqa bepul API"""
+        try:
+            # Hugging Face API (bepul)
+            hf_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+            headers = {
+                "Authorization": f"Bearer {os.getenv('HUGGINGFACE_API_KEY', '')}"
+            }
+            
+            payload = {
+                "inputs": prompt,
+                "parameters": {
+                    "width": width,
+                    "height": height
+                }
+            }
+            
+            session = requests.Session()
+            session.trust_env = False
+            response = session.post(hf_url, headers=headers, json=payload, timeout=90)
+            
+            if response.status_code == 200:
+                image_bytes = response.content
+                logger.info(f"✅ Image generated via alternative API: {len(image_bytes)} bytes")
+                return True, image_bytes
+            else:
+                return False, f"Rasm yaratilmadi. Xatolik: {response.status_code}"
+                
+        except Exception as e:
+            logger.error(f"Alternative API error: {e}")
+            return False, f"Rasm yaratishda xatolik: {str(e)}"
+
+
+class ImageUpscaler:
+    """Rasmni yaxshilash va kattalashtirish funksiyasi"""
+    def __init__(self):
+        self.api_key = STABILITY_API_KEY
+    
+    def upscale_image(self, image_bytes, scale=2):
+        """
+        Rasmni kattalashtirish va yaxshilash
+        scale: 2, 4 (2x yoki 4x kattalashtirish)
+        Returns: (success, enhanced_image_bytes or error_message)
+        """
+        try:
+            from PIL import Image, ImageEnhance, ImageFilter
+            
+            # Rasmni ochish
+            img = Image.open(io.BytesIO(image_bytes))
+            original_size = img.size
+            
+            # Kattalashtirish
+            new_size = (original_size[0] * scale, original_size[1] * scale)
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # Sifatni yaxshilash
+            # 1. Aniqlikni oshirish
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.2)
+            
+            # 2. Kontrastni yaxshilash
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.1)
+            
+            # 3. Ranglarni yaxshilash
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.1)
+            
+            # 4. Yorug'likni optimallashtirish
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.05)
+            
+            # 5. Noise reduction
+            img = img.filter(ImageFilter.SMOOTH_MORE)
+            
+            # Bytes ga aylantirish
+            output = io.BytesIO()
+            img.save(output, format='PNG', quality=95)
+            enhanced_bytes = output.getvalue()
+            
+            logger.info(f"✅ Image upscaled: {original_size} → {new_size} ({len(enhanced_bytes)} bytes)")
+            return True, enhanced_bytes
+            
+        except Exception as e:
+            logger.error(f"Error upscaling image: {e}")
+            return False, f"Rasmni yaxshilashda xatolik: {str(e)}"
+    
+    def enhance_image(self, image_bytes):
+        """
+        Rasmni yaxshilash (kattalashtirmasdan)
+        Returns: (success, enhanced_image_bytes or error_message)
+        """
+        try:
+            from PIL import Image, ImageEnhance, ImageFilter
+            
+            img = Image.open(io.BytesIO(image_bytes))
+            
+            # Sifatni yaxshilash
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.3)
+            
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.15)
+            
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.15)
+            
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.05)
+            
+            # Noise reduction
+            img = img.filter(ImageFilter.SMOOTH_MORE)
+            
+            output = io.BytesIO()
+            img.save(output, format='PNG', quality=95)
+            enhanced_bytes = output.getvalue()
+            
+            logger.info(f"✅ Image enhanced: {len(enhanced_bytes)} bytes")
+            return True, enhanced_bytes
+            
+        except Exception as e:
+            logger.error(f"Error enhancing image: {e}")
+            return False, f"Rasmni yaxshilashda xatolik: {str(e)}"
+
+
+# Initialize generators
+image_generator = ImageGenerator()
+image_upscaler = ImageUpscaler()
+
 # Initialize Veo generator
 veo_generator = GoogleVeoVideoGenerator(
     GOOGLE_PROJECT_ID,
@@ -1547,11 +1756,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ **NIMA QILISH MUMKIN?**\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        "📸 **Rasm yubor** → 🎬 **Video olish**\n\n"
+        "📸 **Rasm yubor** → 🎬 **Video olish**\n"
+        "🎨 **Matn yubor** → 🖼️ **Rasm olish**\n\n"
         
         "🤖 *AI rasmni jonli videoga aylantiradi!*\n"
+        "🎨 *AI matndan rasm yaratadi!*\n"
         "🗣️ *O'zbek tilida suhbatlashadi*\n"
-        "✨ *HD sifatda video*\n\n"
+        "✨ *HD sifatda video va rasm*\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🎭 **VIDEO OVOZLARI:**\n"
@@ -1580,10 +1791,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
-            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu")
+            InlineKeyboardButton("🎨 Rasm Yaratish", callback_data="generate_image")
         ],
         [
-            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
+            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu"),
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
+        ],
+        [
             InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
         ]
     ]
@@ -1596,6 +1810,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for photo messages - PARALLEL PROCESSING"""
     user = update.effective_user
     photo = update.message.photo[-1]
+    message_text = update.message.caption or ""
+    
+    # Rasmni yaxshilash so'rovi tekshirish
+    text_lower = message_text.lower()
+    should_upscale = any(word in text_lower for word in ['promote', 'yaxshila', 'upscale', 'kattalashtir', 'yaxshilash'])
+    
+    if should_upscale:
+        # Rasmni yaxshilash funksiyasiga o'tkazamiz
+        await handle_image_upscale(update, context)
+        return
     
     logger.info(f"🎬 START: User {user.id} ({user.first_name}) ishni boshladi")
     
@@ -2745,6 +2969,167 @@ async def create_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================
+# 🎨 RASM YARATISH FUNKSIYALARI
+# ==========================================
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rasm yaratish tugmasi"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text="🎨 <b>RASM YARATISH</b>\n\n"
+             "Matn yuboring va AI sizga rasm yaratadi!\n\n"
+             "💡 <b>Misol:</b>\n"
+             "• \"Quyosh chiqayotgan tog' manzarasi\"\n"
+             "• \"Yosh ayol, tabiat fonida\"\n"
+             "• \"Zamonaviy shahar ko'chasi\"\n\n"
+             "📝 <b>Matn yuboring:</b>",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    
+    # Foydalanuvchi holatini saqlash
+    context.user_data['waiting_for_image_prompt'] = True
+
+
+async def handle_image_generation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Matn orqali rasm yaratish"""
+    user = update.effective_user
+    prompt = update.message.text.strip()
+    
+    # Foydalanuvchini bazaga qo'shish
+    user_db.add_user(user.id, user.username, user.first_name)
+    
+    # Agar foydalanuvchi rasm yaratish rejimida bo'lmasa, boshqa handlerlarga o'tkazamiz
+    if not context.user_data.get('waiting_for_image_prompt', False):
+        return
+    
+    # Rejimni o'chirish
+    context.user_data['waiting_for_image_prompt'] = False
+    
+    if not prompt or len(prompt) < 3:
+        await update.message.reply_text(
+            "⚠️ Iltimos, kamida 3 ta belgidan iborat matn kiriting!\n\n"
+            "💡 <b>Misol:</b> \"Quyosh chiqayotgan tog' manzarasi\"",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Status xabari
+    status_msg = await update.message.reply_text(
+        "🎨 <b>Rasm yaratilmoqda...</b>\n\n"
+        f"📝 Prompt: <i>{prompt[:50]}...</i>\n"
+        "⏳ Iltimos, kuting...",
+        parse_mode="HTML"
+    )
+    
+    try:
+        # Rasm yaratish
+        success, result = image_generator.generate_image(prompt, width=1024, height=1024)
+        
+        if success:
+            # Rasmni yuborish
+            await status_msg.delete()
+            await update.message.reply_photo(
+                photo=result,
+                caption=f"✅ <b>Rasm yaratildi!</b>\n\n"
+                       f"📝 <b>Prompt:</b> {prompt}\n\n"
+                       "💡 <b>Rasmni yaxshilash uchun:</b> Rasmni yuboring va \"yaxshila\" yoki \"promote\" yozing",
+                parse_mode="HTML"
+            )
+            
+            # Statistika yangilash
+            user_db.increment_user_stat(user.id, 'images_created')
+            logger.info(f"✅ Image generated for user {user.id}: {prompt[:50]}")
+        else:
+            await status_msg.edit_text(
+                f"❌ <b>Xatolik yuz berdi</b>\n\n"
+                f"📝 {result}\n\n"
+                "🔄 Iltimos, qayta urinib ko'ring.",
+                parse_mode="HTML"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in handle_image_generation: {e}")
+        await status_msg.edit_text(
+            "❌ <b>Xatolik yuz berdi</b>\n\n"
+            "🔄 Iltimos, keyinroq qayta urinib ko'ring.",
+            parse_mode="HTML"
+        )
+
+
+async def handle_image_upscale(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rasmni yaxshilash va kattalashtirish"""
+    user = update.effective_user
+    photo = update.message.photo[-1]
+    message_text = update.message.caption or ""
+    
+    # "promote", "yaxshila", "upscale" so'zlarini tekshirish
+    text_lower = message_text.lower()
+    should_upscale = any(word in text_lower for word in ['promote', 'yaxshila', 'upscale', 'kattalashtir', 'yaxshilash'])
+    
+    if not should_upscale:
+        # Oddiy rasm yuborilgan, video yaratish handleriga o'tkazamiz
+        return
+    
+    logger.info(f"🎨 User {user.id} wants to upscale image")
+    
+    # Status xabari
+    status_msg = await update.message.reply_text(
+        "🎨 <b>Rasm yaxshilanmoqda...</b>\n"
+        "⏳ Iltimos, kuting...",
+        parse_mode="HTML"
+    )
+    
+    try:
+        # Rasmni yuklab olish
+        file = await context.bot.get_file(photo.file_id)
+        image_url = file.file_path
+        
+        session = requests.Session()
+        session.trust_env = False
+        response = session.get(image_url, timeout=20)
+        response.raise_for_status()
+        image_bytes = response.content
+        
+        # Rasmni yaxshilash
+        success, result = image_upscaler.upscale_image(image_bytes, scale=2)
+        
+        if success:
+            await status_msg.delete()
+            await update.message.reply_photo(
+                photo=result,
+                caption="✅ <b>Rasm yaxshilandi!</b>\n\n"
+                       "✨ Aniqlik oshirildi\n"
+                       "🎨 Ranglar yaxshilandi\n"
+                       "📏 2x kattalashtirildi",
+                parse_mode="HTML"
+            )
+            
+            # Statistika yangilash
+            user_db.increment_user_stat(user.id, 'images_enhanced')
+            logger.info(f"✅ Image upscaled for user {user.id}")
+        else:
+            await status_msg.edit_text(
+                f"❌ <b>Xatolik yuz berdi</b>\n\n"
+                f"📝 {result}",
+                parse_mode="HTML"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in handle_image_upscale: {e}")
+        await status_msg.edit_text(
+            "❌ <b>Xatolik yuz berdi</b>\n\n"
+            "🔄 Iltimos, keyinroq qayta urinib ko'ring.",
+            parse_mode="HTML"
+        )
+
+
+# ==========================================
 # ORQAGA TUGMASI
 # ==========================================
 async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2779,14 +3164,14 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
-            InlineKeyboardButton("🎨 Shablonlar", callback_data="templates_menu")
+            InlineKeyboardButton("🎨 Rasm Yaratish", callback_data="generate_image")
         ],
         [
             InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu"),
-            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
         ],
         [
-            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
+            InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
         ]
     ]
     
@@ -2859,9 +3244,17 @@ async def scenarios_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for text messages"""
+    # Rasm yaratish rejimini tekshirish
+    if context.user_data.get('waiting_for_image_prompt', False):
+        await handle_image_generation(update, context)
+        return
+    
+    # Oddiy xabar uchun javob
     await update.message.reply_text(
         "📸 **Rasm yuboring**\n\n"
         "🤖 AI uni jonli videoga aylantiradi\n\n"
+        "🎨 **Yoki rasm yaratish uchun:**\n"
+        "Menyudan \"🎨 Rasm Yaratish\" tugmasini bosing\n\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
         "━━━━━━━━━━━━━━━━━━",
@@ -2959,6 +3352,7 @@ def main():
         
         application.add_handler(CallbackQueryHandler(my_stats_button, pattern="^my_stats_button$"))
         application.add_handler(CallbackQueryHandler(create_video, pattern="^create_video$"))
+        application.add_handler(CallbackQueryHandler(generate_image, pattern="^generate_image$"))
         application.add_handler(CallbackQueryHandler(back_to_menu, pattern="^back_to_menu$"))
         application.add_handler(CallbackQueryHandler(wait_for_photo, pattern="^wait_for_photo$"))
         
