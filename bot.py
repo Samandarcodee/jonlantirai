@@ -1526,38 +1526,127 @@ STABILITY_API_KEY = os.getenv('STABILITY_API_KEY', '')
 IMAGE_API_URL = os.getenv('IMAGE_API_URL', 'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image')
 
 
+class PromptEnhancer:
+    """Promptlarni yaxshilash funksiyasi - sifatli rasm uchun"""
+    
+    # Sifatli prompt qo'shimchalari
+    QUALITY_TAGS = [
+        "high quality", "ultra detailed", "8k resolution", "4k resolution",
+        "masterpiece", "best quality", "professional", "photorealistic",
+        "sharp focus", "detailed", "crisp", "vivid colors", "cinematic lighting"
+    ]
+    
+    # Stil qo'shimchalari
+    STYLE_TAGS = [
+        "artistic", "aesthetic", "beautiful", "stunning", "gorgeous",
+        "epic", "dramatic", "atmospheric", "moody", "vibrant"
+    ]
+    
+    # Texnik sifatlar
+    TECHNICAL_TAGS = [
+        "sharp", "clear", "well lit", "properly exposed", "balanced composition",
+        "depth of field", "bokeh", "hdr", "hdr quality"
+    ]
+    
+    @staticmethod
+    def enhance_prompt(user_prompt):
+        """
+        Foydalanuvchi promptini yaxshilash
+        Returns: enhanced prompt
+        """
+        prompt = user_prompt.strip()
+        
+        # Agar prompt allaqachon uzun bo'lsa, faqat sifat qo'shimchalari qo'shamiz
+        if len(prompt.split()) > 20:
+            # Uzun prompt - minimal qo'shimcha
+            quality_additions = ", ".join(["high quality", "ultra detailed", "8k"])
+            return f"{prompt}, {quality_additions}"
+        
+        # Qisqa prompt - to'liq yaxshilash
+        enhanced = prompt
+        
+        # Sifat qo'shimchalari
+        quality_tags = ", ".join([
+            "high quality", "ultra detailed", "8k resolution", 
+            "masterpiece", "best quality", "sharp focus"
+        ])
+        
+        # Stil qo'shimchalari (faqat agar promptda stil yo'q bo'lsa)
+        has_style = any(word in prompt.lower() for word in [
+            "artistic", "realistic", "cartoon", "anime", "painting", "photo"
+        ])
+        
+        if not has_style:
+            style_additions = ", photorealistic, cinematic lighting"
+            enhanced += style_additions
+        
+        # Texnik sifatlar
+        technical_additions = ", vivid colors, detailed, crisp"
+        enhanced += technical_additions
+        
+        # Final qo'shimcha
+        enhanced += f", {quality_tags}"
+        
+        return enhanced
+    
+    @staticmethod
+    def get_negative_prompt():
+        """Negativ prompt - nima qilmaslik kerak"""
+        return (
+            "blurry, low quality, distorted, deformed, ugly, bad anatomy, "
+            "bad proportions, watermark, signature, text, low resolution, "
+            "pixelated, noise, artifacts, jpeg artifacts, compression artifacts"
+        )
+
+
 class ImageGenerator:
     """Rasm yaratish funksiyasi - Text to Image"""
     def __init__(self, api_key=None, api_url=None):
         self.api_key = api_key or STABILITY_API_KEY
         self.api_url = api_url or IMAGE_API_URL
     
-    def generate_image(self, prompt, width=1024, height=1024):
+    def generate_image(self, prompt, width=1024, height=1024, enhance_prompt=True):
         """
         Matn orqali rasm yaratish
+        enhance_prompt: True bo'lsa, prompt avtomatik yaxshilanadi
         Returns: (success, image_bytes or error_message)
         """
         try:
+            # Promptni yaxshilash
+            if enhance_prompt:
+                enhanced_prompt = PromptEnhancer.enhance_prompt(prompt)
+                logger.info(f"📝 Original prompt: {prompt[:50]}...")
+                logger.info(f"✨ Enhanced prompt: {enhanced_prompt[:100]}...")
+            else:
+                enhanced_prompt = prompt
+            
             if not self.api_key:
                 # Agar API key bo'lmasa, alternative API ishlatamiz
-                return self._generate_with_alternative_api(prompt, width, height)
+                return self._generate_with_alternative_api(enhanced_prompt, width, height)
             
             headers = {
                 "Accept": "application/json",
                 "Authorization": f"Bearer {self.api_key}"
             }
             
+            # Negativ prompt qo'shish
+            negative_prompt = PromptEnhancer.get_negative_prompt()
+            
             body = {
-                "steps": 40,
+                "steps": 50,  # Ko'proq qadamlar = yaxshi sifat
                 "width": width,
                 "height": height,
                 "seed": 0,
-                "cfg_scale": 7,
+                "cfg_scale": 8,  # Yuqoriroq = promptga ko'proq amal qiladi
                 "samples": 1,
                 "text_prompts": [
                     {
-                        "text": prompt,
-                        "weight": 1
+                        "text": enhanced_prompt,
+                        "weight": 1.0
+                    },
+                    {
+                        "text": negative_prompt,
+                        "weight": -1.0  # Negativ prompt
                     }
                 ],
             }
@@ -1594,6 +1683,9 @@ class ImageGenerator:
     def _generate_with_alternative_api(self, prompt, width, height):
         """Alternative API - Hugging Face yoki boshqa bepul API"""
         try:
+            # Promptni yaxshilash
+            enhanced_prompt = PromptEnhancer.enhance_prompt(prompt)
+            
             # Hugging Face API (bepul)
             hf_url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
             headers = {
@@ -1601,10 +1693,12 @@ class ImageGenerator:
             }
             
             payload = {
-                "inputs": prompt,
+                "inputs": enhanced_prompt,
                 "parameters": {
                     "width": width,
-                    "height": height
+                    "height": height,
+                    "num_inference_steps": 50,  # Ko'proq qadamlar
+                    "guidance_scale": 7.5  # Promptga ko'proq amal qilish
                 }
             }
             
@@ -1631,44 +1725,64 @@ class ImageUpscaler:
     
     def upscale_image(self, image_bytes, scale=2):
         """
-        Rasmni kattalashtirish va yaxshilash
+        Rasmni kattalashtirish va yaxshilash - YAXSHILANGAN VERSIYA
         scale: 2, 4 (2x yoki 4x kattalashtirish)
         Returns: (success, enhanced_image_bytes or error_message)
         """
         try:
-            from PIL import Image, ImageEnhance, ImageFilter
+            from PIL import Image, ImageEnhance, ImageFilter, ImageOps
             
             # Rasmni ochish
             img = Image.open(io.BytesIO(image_bytes))
             original_size = img.size
             
-            # Kattalashtirish
+            # RGB ga aylantirish (agar RGBA bo'lsa)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # 1. Avval kichik yaxshilash (kattalashtirishdan oldin)
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.1)
+            
+            # 2. Kattalashtirish - LANCZOS algoritmi (eng yaxshi sifat)
             new_size = (original_size[0] * scale, original_size[1] * scale)
             img = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Sifatni yaxshilash
-            # 1. Aniqlikni oshirish
+            # 3. Aniqlikni oshirish (2 marta - kattalashtirishdan keyin)
             enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.2)
+            img = enhancer.enhance(1.4)  # Ko'proq aniqlik
             
-            # 2. Kontrastni yaxshilash
+            # 4. Kontrastni yaxshilash
             enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.1)
+            img = enhancer.enhance(1.15)
             
-            # 3. Ranglarni yaxshilash
+            # 5. Ranglarni yaxshilash
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.2)  # Ko'proq ranglar
+            
+            # 6. Yorug'likni optimallashtirish
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.08)
+            
+            # 7. Saturation (to'yinganlik) yaxshilash
             enhancer = ImageEnhance.Color(img)
             img = enhancer.enhance(1.1)
             
-            # 4. Yorug'likni optimallashtirish
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.05)
-            
-            # 5. Noise reduction
+            # 8. Noise reduction (yumshoq filter)
             img = img.filter(ImageFilter.SMOOTH_MORE)
             
-            # Bytes ga aylantirish
+            # 9. Qo'shimcha aniqlik (Unsharp Mask effekti)
+            # Unsharp mask simulyatsiyasi
+            sharpened = img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+            # 70% original + 30% sharpened
+            img = Image.blend(img, sharpened, 0.3)
+            
+            # 10. Auto contrast (agar kerak bo'lsa)
+            img = ImageOps.autocontrast(img, cutoff=1)
+            
+            # Bytes ga aylantirish - yuqori sifat
             output = io.BytesIO()
-            img.save(output, format='PNG', quality=95)
+            img.save(output, format='PNG', quality=100, optimize=True)  # 100% sifat
             enhanced_bytes = output.getvalue()
             
             logger.info(f"✅ Image upscaled: {original_size} → {new_size} ({len(enhanced_bytes)} bytes)")
@@ -1680,32 +1794,50 @@ class ImageUpscaler:
     
     def enhance_image(self, image_bytes):
         """
-        Rasmni yaxshilash (kattalashtirmasdan)
+        Rasmni yaxshilash (kattalashtirmasdan) - YAXSHILANGAN VERSIYA
         Returns: (success, enhanced_image_bytes or error_message)
         """
         try:
-            from PIL import Image, ImageEnhance, ImageFilter
+            from PIL import Image, ImageEnhance, ImageFilter, ImageOps
             
             img = Image.open(io.BytesIO(image_bytes))
             
-            # Sifatni yaxshilash
+            # RGB ga aylantirish
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # 1. Aniqlikni oshirish
             enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.3)
+            img = enhancer.enhance(1.5)  # Ko'proq aniqlik
             
+            # 2. Kontrastni yaxshilash
             enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.15)
+            img = enhancer.enhance(1.2)
             
+            # 3. Ranglarni yaxshilash
             enhancer = ImageEnhance.Color(img)
-            img = enhancer.enhance(1.15)
+            img = enhancer.enhance(1.25)  # Ko'proq ranglar
             
+            # 4. Yorug'likni optimallashtirish
             enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.05)
+            img = enhancer.enhance(1.1)
             
-            # Noise reduction
+            # 5. Unsharp Mask (aniqlik uchun)
+            sharpened = img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+            img = Image.blend(img, sharpened, 0.4)  # 40% sharpened
+            
+            # 6. Auto contrast
+            img = ImageOps.autocontrast(img, cutoff=1)
+            
+            # 7. Noise reduction
             img = img.filter(ImageFilter.SMOOTH_MORE)
             
+            # 8. Qo'shimcha aniqlik
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.1)
+            
             output = io.BytesIO()
-            img.save(output, format='PNG', quality=95)
+            img.save(output, format='PNG', quality=100, optimize=True)  # 100% sifat
             enhanced_bytes = output.getvalue()
             
             logger.info(f"✅ Image enhanced: {len(enhanced_bytes)} bytes")
@@ -2929,6 +3061,10 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
     ]
     
+    # Rasm statistikasi
+    images_created = stats.get('images_created', 0)
+    images_enhanced = stats.get('images_enhanced', 0)
+    
     stats_text = (
         "📊 <b>STATISTIKA</b>\n\n"
         
@@ -2936,6 +3072,8 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏅 {status}\n\n"
         
         f"🎬 Videolar: <b>{stats['videos_created']}</b>\n"
+        f"🎨 Rasmlar: <b>{images_created}</b>\n"
+        f"✨ Yaxshilangan: <b>{images_enhanced}</b>\n"
         f"{next_video}\n\n"
         
         "━━━━━━━━━━━━━━━━━━\n"
@@ -2980,14 +3118,27 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
     ]
     
+    prompt_tips = (
+        "💡 <b>YAXSHI PROMPT YOZISH:</b>\n\n"
+        "✅ <b>Qo'shing:</b>\n"
+        "• Ob'ekt/odam haqida batafsil\n"
+        "• Ranglar va muhit\n"
+        "• Yorug'lik va atmosfera\n"
+        "• Stil (realistic, artistic, etc.)\n\n"
+        "❌ <b>Qilmaslik:</b>\n"
+        "• Juda qisqa (1-2 so'z)\n"
+        "• Noaniq tavsiflar\n"
+        "• Juda ko'p so'zlar (50+)\n\n"
+        "📝 <b>MISOLLAR:</b>\n"
+        "• \"Quyosh chiqayotgan tog' manzarasi, sariq va qizil ranglar, dramatik osmon\"\n"
+        "• \"Yosh ayol, tabiat fonida, yorug' kunduz, professional foto\"\n"
+        "• \"Zamonaviy shahar ko'chasi, kechki yorug'lik, neon belgilar\"\n\n"
+        "✨ <b>AI avtomatik yaxshilaydi!</b> Siz oddiy yozing, biz sifatli qilamiz.\n\n"
+        "📝 <b>Matn yuboring:</b>"
+    )
+    
     await query.edit_message_text(
-        text="🎨 <b>RASM YARATISH</b>\n\n"
-             "Matn yuboring va AI sizga rasm yaratadi!\n\n"
-             "💡 <b>Misol:</b>\n"
-             "• \"Quyosh chiqayotgan tog' manzarasi\"\n"
-             "• \"Yosh ayol, tabiat fonida\"\n"
-             "• \"Zamonaviy shahar ko'chasi\"\n\n"
-             "📝 <b>Matn yuboring:</b>",
+        text=f"🎨 <b>RASM YARATISH</b>\n\n{prompt_tips}",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
@@ -3034,11 +3185,19 @@ async def handle_image_generation(update: Update, context: ContextTypes.DEFAULT_
         if success:
             # Rasmni yuborish
             await status_msg.delete()
+            
+            # Enhanced prompt haqida ma'lumot
+            enhanced_info = ""
+            if len(prompt.split()) < 10:
+                enhanced_info = "\n✨ <i>Prompt avtomatik yaxshilandi sifatli natija uchun</i>"
+            
             await update.message.reply_photo(
                 photo=result,
                 caption=f"✅ <b>Rasm yaratildi!</b>\n\n"
-                       f"📝 <b>Prompt:</b> {prompt}\n\n"
-                       "💡 <b>Rasmni yaxshilash uchun:</b> Rasmni yuboring va \"yaxshila\" yoki \"promote\" yozing",
+                       f"📝 <b>Sizning prompt:</b> {prompt}\n"
+                       f"{enhanced_info}\n\n"
+                       "💡 <b>Rasmni yaxshilash:</b>\n"
+                       "Rasmni yuboring va caption'da \"promote\", \"yaxshila\" yoki \"upscale\" yozing",
                 parse_mode="HTML"
             )
             
