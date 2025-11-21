@@ -2552,15 +2552,44 @@ async def cat_boss_confident(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def cat_upload_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Kategoriya bo'yicha rasm yuborishni soroq"""
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        text="📸 <b>RASM YUBORINGMI?</b>\n\n"
-             "Pastdagi chat'ga rasmni yuboring,\n"
-             "AI 5ta random prompt ishlatib video yaratadi!",
-        parse_mode="HTML"
-    )
+    try:
+        query = update.callback_query
+        if query:
+            await query.answer()
+            
+            # State ni o'rnatish - rasm kutayotganimizni belgilash
+            context.user_data['waiting_for_photo'] = True
+            
+            await query.edit_message_text(
+                text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+                     "Pastdagi chat'ga rasmni yuboring,\n"
+                     "AI 5ta random prompt ishlatib video yaratadi!\n\n"
+                     "💡 <i>Yuqori sifatli rasm yuboring (JPG yoki PNG)</i>\n"
+                     "⏱️ <i>Video 2-15 daqiqada tayyor bo'ladi</i>",
+                parse_mode="HTML"
+            )
+            logger.info(f"📸 User {update.effective_user.id} - Kategoriya bo'yicha rasm yuborishni kutmoqda")
+        else:
+            await update.message.reply_text(
+                text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+                     "Rasmni yuboring, AI 5ta random prompt ishlatib video yaratadi!\n\n"
+                     "💡 <i>Yuqori sifatli rasm yuboring (JPG yoki PNG)</i>\n"
+                     "⏱️ <i>Video 2-15 daqiqada tayyor bo'ladi</i>",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"❌ Error in cat_upload_photo: {e}")
+        try:
+            query = update.callback_query
+            if query:
+                await query.answer("❌ Xatolik yuz berdi", show_alert=True)
+            elif update.message:
+                await update.message.reply_text(
+                    "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
+                    parse_mode="HTML"
+                )
+        except:
+            pass
 
 
 async def template_comedy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2802,14 +2831,44 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 async def wait_for_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Rasmni kutish"""
-    query = update.callback_query
-    await query.answer()
-    
-    await query.edit_message_text(
-        text="📸 <b>RASM YUBORINGMI?</b>\n\n"
-             "Pastdagi chat-da rasm yuboring va AI uni jonli videoga aylantiradi!",
-        parse_mode="HTML"
-    )
+    try:
+        query = update.callback_query
+        if query:
+            await query.answer()
+            
+            # State ni o'rnatish - rasm kutayotganimizni belgilash
+            context.user_data['waiting_for_photo'] = True
+            
+            await query.edit_message_text(
+                text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+                     "Pastdagi chat-da rasm yuboring va AI uni jonli videoga aylantiradi!\n\n"
+                     "💡 <i>Yuqori sifatli rasm yuboring (JPG yoki PNG)</i>\n"
+                     "⏱️ <i>Video 2-15 daqiqada tayyor bo'ladi</i>",
+                parse_mode="HTML"
+            )
+            logger.info(f"📸 User {update.effective_user.id} - Rasm yuborishni kutmoqda")
+        else:
+            # Agar query bo'lmasa, oddiy xabar yuborish
+            await update.message.reply_text(
+                text="📸 <b>RASM YUBORINGMI?</b>\n\n"
+                     "Rasm yuboring va AI uni jonli videoga aylantiradi!\n\n"
+                     "💡 <i>Yuqori sifatli rasm yuboring (JPG yoki PNG)</i>\n"
+                     "⏱️ <i>Video 2-15 daqiqada tayyor bo'ladi</i>",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        logger.error(f"❌ Error in wait_for_photo: {e}")
+        try:
+            query = update.callback_query
+            if query:
+                await query.answer("❌ Xatolik yuz berdi", show_alert=True)
+            elif update.message:
+                await update.message.reply_text(
+                    "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
+                    parse_mode="HTML"
+                )
+        except:
+            pass
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
