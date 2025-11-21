@@ -1579,6 +1579,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # MENYU TUGMALARI
     keyboard = [
         [
+            InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")
+        ],
+        [
             InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
             InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu")
         ],
