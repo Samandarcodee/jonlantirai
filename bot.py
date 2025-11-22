@@ -50,6 +50,10 @@ GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-
 # Admin configuration
 ADMIN_IDS = [5928372261]  # Shu ID bilan faqat Admin huquqlari
 
+# VIP Users - har 6 soatda 5 ta video yaratish huquqi
+VIP_USERS = [7506450592, 5801250458]  # Maxsus huquqli foydalanuvchilar
+VIP_VIDEO_LIMIT = 5  # VIP userlar har 6 soatda 5 ta video yaratishi mumkin
+
 # Video creation limits (6 hours for regular users)
 VIDEO_COOLDOWN_HOURS = 6
 VIDEO_COOLDOWN_SECONDS = VIDEO_COOLDOWN_HOURS * 3600
@@ -97,7 +101,9 @@ class UserDatabase:
                 'videos_created': 0,
                 'last_video_time': 0,
                 'join_date': time.time(),
-                'total_requests': 0
+                'total_requests': 0,
+                'vip_period_start': 0,                # VIP userlar uchun 6 soatlik davr boshi
+                'vip_videos_in_period': 0             # Joriy 6 soatda yaratilgan videolar soni
             }
             self.save_db()
             logger.info(f"✅ New user added - ID: {user_id}, Username: {safe_username}, Name: {safe_first_name}")
@@ -106,8 +112,49 @@ class UserDatabase:
         """Check if user can create video (6 hour cooldown)"""
         # Admin has no limits
         if user_id in ADMIN_IDS:
+            logger.info(f"🔓 User {user_id} is ADMIN - no limits")
             return True, 0
         
+        # VIP users - 5 videos per 6 hours
+        if user_id in VIP_USERS:
+            logger.info(f"⭐ User {user_id} is VIP - checking limit (5 videos per 6 hours)")
+            user_id_str = str(user_id)
+            if user_id_str not in self.data:
+                logger.info(f"⭐ VIP user {user_id} not in database yet - allowing")
+                return True, 0
+            
+            # Eski userlar uchun VIP fieldlarini qo'shish
+            if 'vip_period_start' not in self.data[user_id_str]:
+                logger.info(f"⭐ VIP user {user_id} - adding VIP fields to existing user")
+                self.data[user_id_str]['vip_period_start'] = 0
+                self.data[user_id_str]['vip_videos_in_period'] = 0
+                self.save_db()
+            
+            # Yangi 6 soatlik davrni boshlash kerakmi?
+            period_start = self.data[user_id_str].get('vip_period_start', 0)
+            time_since_period_start = time.time() - period_start
+            
+            # Agar 6 soat o'tgan bo'lsa, yangi davr boshlash
+            if time_since_period_start >= VIDEO_COOLDOWN_SECONDS or period_start == 0:
+                logger.info(f"⭐ VIP user {user_id} - new period starting or first video - allowing")
+                return True, 0
+            
+            # Joriy davrda nechta video yaratilgan?
+            videos_in_period = self.data[user_id_str].get('vip_videos_in_period', 0)
+            logger.info(f"⭐ VIP user {user_id} - videos in current period: {videos_in_period}/{VIP_VIDEO_LIMIT}")
+            
+            if videos_in_period < VIP_VIDEO_LIMIT:
+                logger.info(f"⭐ VIP user {user_id} - can create video ({videos_in_period + 1}/{VIP_VIDEO_LIMIT})")
+                return True, 0
+            else:
+                # 5 ta video limitiga yetgan, keyingi davr boshlanishini kuting
+                time_left = VIDEO_COOLDOWN_SECONDS - time_since_period_start
+                hours_left = int(time_left // 3600)
+                minutes_left = int((time_left % 3600) // 60)
+                logger.info(f"⭐ VIP user {user_id} - limit reached (5/5) - wait {hours_left}h {minutes_left}m")
+                return False, time_left
+        
+        # Regular users - 1 video per 6 hours
         user_id_str = str(user_id)
         if user_id_str not in self.data:
             return True, 0
@@ -125,9 +172,33 @@ class UserDatabase:
         """Record that user created a video"""
         user_id_str = str(user_id)
         if user_id_str in self.data:
-            self.data[user_id_str]['last_video_time'] = time.time()
+            current_time = time.time()
+            self.data[user_id_str]['last_video_time'] = current_time
             self.data[user_id_str]['videos_created'] += 1
             self.data[user_id_str]['total_requests'] += 1
+            
+            # VIP userlar uchun maxsus tracking
+            if user_id in VIP_USERS:
+                logger.info(f"⭐ Recording VIP user {user_id} video creation")
+                # Eski userlar uchun VIP fieldlarini qo'shish
+                if 'vip_period_start' not in self.data[user_id_str]:
+                    self.data[user_id_str]['vip_period_start'] = 0
+                    self.data[user_id_str]['vip_videos_in_period'] = 0
+                
+                period_start = self.data[user_id_str].get('vip_period_start', 0)
+                time_since_period_start = current_time - period_start
+                
+                # Yangi davr boshlanishi kerak bo'lsa yoki birinchi marta bo'lsa
+                if time_since_period_start >= VIDEO_COOLDOWN_SECONDS or period_start == 0:
+                    self.data[user_id_str]['vip_period_start'] = current_time
+                    self.data[user_id_str]['vip_videos_in_period'] = 1
+                    logger.info(f"⭐ VIP user {user_id} - NEW PERIOD started, videos: 1/{VIP_VIDEO_LIMIT}")
+                else:
+                    # Joriy davrga video qo'shish
+                    self.data[user_id_str]['vip_videos_in_period'] += 1
+                    videos_count = self.data[user_id_str]['vip_videos_in_period']
+                    logger.info(f"⭐ VIP user {user_id} - video recorded, videos in period: {videos_count}/{VIP_VIDEO_LIMIT}")
+            
             self.save_db()
     
     def get_user_stats(self, user_id):
@@ -1526,13 +1597,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
     
-    # Admin yoki oddiy foydalanuvchi
+    # Admin yoki oddiy foydalanuvchi yoki VIP
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = user.id in VIP_USERS
+    admin_badge = " 👑" if is_admin else (" ⭐" if is_vip else "")
     
-    # Cheklov yoki admin status
+    # Cheklov yoki admin status yoki VIP status
     if is_admin:
         cheklov_text = "👑 **Siz Admin!**\n⚡ Cheklovsiz video yaratish\n✨ Unlimited quvvat!"
+    elif is_vip:
+        cheklov_text = "⭐ **Siz VIP foydalanuvchi!**\n🎬 Har 6 soatda 5 ta video yaratish\n✨ Maxsus huquq!"
     else:
         cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video\n💡 Kuting, keyin qayta urinib ko'ring!"
     
@@ -2247,13 +2321,30 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = user.id in VIP_USERS
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        # VIP user uchun qancha video qolganini ko'rsatish
+        user_id_str = str(user.id)
+        if user_id_str in user_db.data:
+            videos_in_period = user_db.data[user_id_str].get('vip_videos_in_period', 0)
+            videos_left = VIP_VIDEO_LIMIT - videos_in_period
+            status = f"⭐ **VIP** ({videos_left}/{VIP_VIDEO_LIMIT} video qoldi)"
+        else:
+            status = "⭐ **VIP** (5 ta video/6 soat)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
-        next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
+        if is_vip:
+            next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin (5 ta limitga yetdingiz)"
+        else:
+            next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
     else:
@@ -2721,13 +2812,30 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = user.id in VIP_USERS
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        # VIP user uchun qancha video qolganini ko'rsatish
+        user_id_str = str(user.id)
+        if user_id_str in user_db.data:
+            videos_in_period = user_db.data[user_id_str].get('vip_videos_in_period', 0)
+            videos_left = VIP_VIDEO_LIMIT - videos_in_period
+            status = f"⭐ **VIP** ({videos_left}/{VIP_VIDEO_LIMIT} video qoldi)"
+        else:
+            status = "⭐ **VIP** (5 ta video/6 soat)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
-        next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
+        if is_vip:
+            next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin (5 ta limitga yetdingiz)"
+        else:
+            next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
     else:
@@ -2786,9 +2894,15 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = user.id in VIP_USERS
+    admin_badge = " 👑" if is_admin else (" ⭐" if is_vip else "")
     
-    cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video" if not is_admin else "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    if is_admin:
+        cheklov_text = "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    elif is_vip:
+        cheklov_text = "⭐ **Siz VIP:** Har 6 soatda 5 ta video yaratish!"
+    else:
+        cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video"
     
     main_menu_text = (
         f"🎬 **Jonlantir AI**{admin_badge}\n\n"
