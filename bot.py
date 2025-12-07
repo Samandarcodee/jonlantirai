@@ -3549,125 +3549,276 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 
 class GoogleGeminiImageGenerator:
-    """Google Gemini for image generation and editing"""
+    """Hybrid image generation/editing with Gemini + Imagen fallback."""
     
-    def __init__(self):
-        """Initialize Gemini image generator"""
+    def __init__(self, project_id, location, service_account_file):
         self.generation_model = None
         self.vision_model = None
+        self.project_id = project_id
+        self.location = location or 'us-central1'
+        self.service_account_file = service_account_file
+        self.vertex_token = None
+        self.vertex_token_expiry = 0
+        self.vertex_models = [
+            'imagen-3.0-generate-001',
+            'imagegeneration@006',
+            'imagegeneration@005'
+        ]
         
         try:
-            # Gemini 2.0 Flash Experimental for image generation
             self.generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            # Gemini 1.5 Flash for vision/editing tasks
             self.vision_model = genai.GenerativeModel('gemini-1.5-flash')
             logger.info("✅ Google Gemini models initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini: {e}")
     
     def generate_image(self, prompt):
-        """Generate high-quality image from text using Gemini"""
-        try:
-            if not self.generation_model:
-                logger.error("Gemini generation model not initialized")
-                return None
-            
-            # Enhance prompt for better quality
-            enhanced_prompt = self._enhance_generation_prompt(prompt)
-            logger.info(f"📝 Gemini generation prompt: {enhanced_prompt[:100]}...")
-            
-            # Generate image with Gemini
-            response = self.generation_model.generate_content(
-                enhanced_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.4,
-                    top_p=0.95,
-                    top_k=40,
-                    max_output_tokens=8192,
-                )
-            )
-            
-            # Check if response contains image
-            if response and hasattr(response, 'candidates') and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        # Return image bytes
-                        image_data = part.inline_data.data
-                        logger.info(f"✅ Gemini generated image: {len(image_data)} bytes")
-                        return {'image_bytes': image_data, 'success': True}
-            
-            # Try alternative: describe and use imagen as fallback
-            logger.warning("Gemini didn't return image, trying alternative...")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Gemini generation error: {e}", exc_info=True)
-            return None
+        """Generate image using Gemini first, then Imagen fallback."""
+        enhanced_prompt = self._enhance_generation_prompt(prompt)
+        logger.info(f"📝 Generation prompt: {enhanced_prompt[:100]}...")
+        
+        gemini_result = self._generate_with_gemini(enhanced_prompt)
+        if gemini_result:
+            return gemini_result
+        
+        imagen_result = self._generate_with_imagen(enhanced_prompt)
+        if imagen_result:
+            return imagen_result
+        
+        logger.error("❌ Image generation failed across all models")
+        return None
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image using Gemini vision + prompt"""
+        """Edit image using Imagen primary + Gemini fallback."""
+        optimized_bytes = self._optimize_image(image_bytes)
+        enhanced_prompt = self._enhance_edit_prompt(prompt)
+        logger.info(f"📝 Edit prompt: {enhanced_prompt[:100]}...")
+        
+        imagen_result = self._edit_with_imagen(optimized_bytes, enhanced_prompt)
+        if imagen_result:
+            return imagen_result
+        
+        gemini_result = self._edit_with_gemini(optimized_bytes, enhanced_prompt)
+        if gemini_result:
+            return gemini_result
+        
+        logger.error("❌ Image editing failed across all models")
+        return None
+    
+    # ---------- Gemini handlers ----------
+    def _generate_with_gemini(self, prompt):
+        if not self.generation_model:
+            return None
+        
         try:
-            if not self.vision_model:
-                logger.error("Gemini vision model not initialized")
-                return None
-            
-            # Optimize image first
-            image_bytes = self._optimize_image(image_bytes)
-            
-            # Enhance prompt
-            enhanced_prompt = self._enhance_edit_prompt(prompt)
-            logger.info(f"📝 Gemini edit prompt: {enhanced_prompt[:100]}...")
-            
-            # Load image from bytes
-            img = Image.open(io.BytesIO(image_bytes))
-            
-            # Create detailed prompt for image editing
-            edit_instruction = (
-                f"You are an expert image editor. "
-                f"Modify this image as requested: {enhanced_prompt}. "
-                f"Generate a new high-quality image that incorporates the requested changes "
-                f"while maintaining the original style, composition, and quality. "
-                f"Output ONLY the modified image."
-            )
-            
-            # Use Gemini for vision + generation
             response = self.generation_model.generate_content(
-                [edit_instruction, img],
+                prompt,
                 generation_config=genai.GenerationConfig(
                     temperature=0.4,
                     top_p=0.95,
                     top_k=40,
                     max_output_tokens=8192,
+                    response_mime_type="image/png"
                 )
             )
-            
-            # Extract image from response
-            if response and hasattr(response, 'candidates') and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        image_data = part.inline_data.data
-                        logger.info(f"✅ Gemini edited image: {len(image_data)} bytes")
-                        return {'image_bytes': image_data, 'success': True}
-            
-            logger.warning("Gemini didn't return edited image")
-            return None
-            
+            image_bytes = self._extract_inline_image(response)
+            if image_bytes:
+                logger.info(f"✅ Gemini image bytes: {len(image_bytes)}")
+                return {'image_bytes': image_bytes, 'success': True}
         except Exception as e:
-            logger.error(f"Gemini edit error: {e}", exc_info=True)
-            return None
+            logger.warning(f"Gemini generation error: {e}", exc_info=True)
+        return None
     
-    def _optimize_image(self, image_bytes):
-        """Optimize image for better results"""
+    def _edit_with_gemini(self, image_bytes, prompt):
+        model = self.vision_model or self.generation_model
+        if not model:
+            return None
+        
         try:
             img = Image.open(io.BytesIO(image_bytes))
-            
-            # Convert to RGB
+            instruction = (
+                f"You are an expert image editor. Modify this image as requested: {prompt}. "
+                f"Return only the edited high-quality image."
+            )
+            response = model.generate_content(
+                [instruction, img],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.4,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                    response_mime_type="image/png"
+                )
+            )
+            image_bytes = self._extract_inline_image(response)
+            if image_bytes:
+                logger.info(f"✅ Gemini edited image bytes: {len(image_bytes)}")
+                return {'image_bytes': image_bytes, 'success': True}
+        except Exception as e:
+            logger.warning(f"Gemini edit error: {e}", exc_info=True)
+        return None
+    
+    def _extract_inline_image(self, response):
+        try:
+            if not response or not hasattr(response, 'candidates'):
+                return None
+            for candidate in response.candidates:
+                parts = getattr(candidate.content, 'parts', [])
+                for part in parts:
+                    inline = getattr(part, 'inline_data', None)
+                    if inline and inline.data:
+                        return inline.data
+        except Exception as e:
+            logger.debug(f"Inline parse error: {e}")
+        return None
+    
+    # ---------- Imagen handlers ----------
+    def _generate_with_imagen(self, prompt):
+        if not self._imagen_available():
+            return None
+        
+        payload = {
+            "instances": [{
+                "prompt": prompt
+            }],
+            "parameters": self._build_imagen_parameters("1:1")
+        }
+        return self._call_imagen_models(payload)
+    
+    def _edit_with_imagen(self, image_bytes, prompt):
+        if not self._imagen_available():
+            return None
+        
+        aspect_ratio = self._get_image_aspect_ratio(image_bytes)
+        payload = {
+            "instances": [{
+                "prompt": prompt,
+                "image": {
+                    "bytesBase64Encoded": base64.b64encode(image_bytes).decode('utf-8'),
+                    "mimeType": "image/jpeg"
+                }
+            }],
+            "parameters": self._build_imagen_parameters(aspect_ratio)
+        }
+        return self._call_imagen_models(payload)
+    
+    def _imagen_available(self):
+        if not self.project_id:
+            logger.warning("Imagen fallback disabled (missing project_id)")
+            return False
+        if not self.service_account_file or not os.path.exists(self.service_account_file):
+            logger.warning("Imagen fallback disabled (service account missing)")
+            return False
+        return True
+    
+    def _call_imagen_models(self, payload):
+        for model_id in self.vertex_models:
+            try:
+                response = self._invoke_imagen_model(model_id, payload)
+                if not response:
+                    continue
+                
+                predictions = response.get('predictions') or []
+                for prediction in predictions:
+                    encoded = prediction.get('bytesBase64Encoded') or prediction.get('imageBytes')
+                    if encoded:
+                        try:
+                            image_bytes = base64.b64decode(encoded)
+                            logger.info(f"✅ Imagen model {model_id} returned image ({len(image_bytes)} bytes)")
+                            return {'image_bytes': image_bytes, 'success': True}
+                        except Exception as decode_error:
+                            logger.warning(f"Decode error from {model_id}: {decode_error}")
+                logger.warning(f"{model_id} responded without usable image data")
+            except Exception as model_error:
+                logger.warning(f"Imagen model {model_id} error: {model_error}")
+                continue
+        return None
+    
+    def _invoke_imagen_model(self, model_id, payload):
+        token = self._get_vertex_access_token()
+        if not token:
+            return None
+        
+        endpoint = (
+            f"https://{self.location}-aiplatform.googleapis.com/v1/"
+            f"projects/{self.project_id}/locations/{self.location}/"
+            f"publishers/google/models/{model_id}:predict"
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        session = requests.Session()
+        session.trust_env = False
+        response = session.post(endpoint, json=payload, headers=headers, timeout=90)
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        logger.warning(f"Imagen {model_id} status {response.status_code}: {response.text[:200]}")
+        return None
+    
+    def _get_vertex_access_token(self):
+        if self.vertex_token and time.time() < self.vertex_token_expiry:
+            return self.vertex_token
+        
+        if not self._imagen_available():
+            return None
+        
+        try:
+            credentials = service_account.Credentials.from_service_account_file(
+                self.service_account_file,
+                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            )
+            session = requests.Session()
+            session.trust_env = False
+            request = Request(session)
+            credentials.refresh(request)
+            self.vertex_token = credentials.token
+            self.vertex_token_expiry = time.time() + 3300
+            return self.vertex_token
+        except Exception as e:
+            logger.error(f"Unable to refresh Imagen token: {e}")
+            return None
+    
+    def _build_imagen_parameters(self, aspect_ratio):
+        return {
+            "sampleCount": 1,
+            "aspectRatio": aspect_ratio,
+            "guidanceScale": 15,
+            "negativePrompt": "low quality, blurry, distorted, watermark, text, bad anatomy",
+            "seed": 0
+        }
+    
+    def _get_image_aspect_ratio(self, image_bytes):
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as img:
+                width, height = img.size
+        except Exception:
+            return "1:1"
+        
+        if width == 0 or height == 0:
+            return "1:1"
+        
+        ratio = width / height
+        if 0.9 <= ratio <= 1.1:
+            return "1:1"
+        if ratio >= 1.3:
+            return "16:9"
+        if ratio <= 0.77:
+            return "9:16"
+        return "4:3" if ratio > 1 else "3:4"
+    
+    # ---------- Shared helpers ----------
+    def _optimize_image(self, image_bytes):
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Resize if needed (optimal: 1024x1024 for Gemini)
             width, height = img.size
-            max_size = 1024
+            max_size = 2048
             min_size = 512
             
             if width < min_size or height < min_size:
@@ -3681,43 +3832,36 @@ class GoogleGeminiImageGenerator:
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
                 logger.info(f"📐 Downscaled: {width}x{height} → {new_size}")
             
-            # Save optimized
             output = io.BytesIO()
             img.save(output, format='JPEG', quality=95)
             return output.getvalue()
-            
         except Exception as e:
             logger.warning(f"Image optimization failed: {e}")
             return image_bytes
     
     def _enhance_generation_prompt(self, user_prompt):
-        """Enhance prompt for image generation"""
         prompt = user_prompt.strip()
-        
-        enhanced = (
+        return (
             f"Create a high-quality, detailed image: {prompt}. "
             f"Style: photorealistic, professional photography, 8k resolution, "
             f"sharp focus, perfect composition, vibrant colors, masterpiece quality. "
             f"NO text, NO watermarks, NO signatures."
         )
-        
-        return enhanced
     
     def _enhance_edit_prompt(self, user_prompt):
-        """Enhance prompt for image editing"""
         prompt = user_prompt.strip()
-        
-        enhanced = (
-            f"{prompt}. "
-            f"Maintain high quality, photorealistic style, sharp focus, "
-            f"natural lighting, seamless integration, professional result."
+        return (
+            f"{prompt}. Maintain high quality, photorealistic style, sharp focus, "
+            f"natural lighting, seamless integration, professional, realistic result."
         )
-        
-        return enhanced
 
 
-# Initialize Gemini generator
-imagen_generator = GoogleGeminiImageGenerator()
+# Initialize Gemini/Imagen hybrid generator
+imagen_generator = GoogleGeminiImageGenerator(
+    GOOGLE_PROJECT_ID,
+    GOOGLE_LOCATION,
+    GOOGLE_SERVICE_ACCOUNT_FILE
+)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
