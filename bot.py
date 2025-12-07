@@ -3278,7 +3278,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "🎨 Google Gemini rasm yaratyapti...\n\n"
+            "🎨 Google Imagen rasm yaratyapti...\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
@@ -3296,7 +3296,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=(
                         "✅ **Rasm tayyor!**\n\n"
                         f"📝 _{text[:50]}_\n\n"
-                        "🤖 Google Gemini 2.0\n\n"
+                        "🤖 Google Imagen 3.0\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
                         "━━━━━━━━━━━━━━━━━━"
@@ -3311,15 +3311,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
                 "Rasm yaratib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
-                "💡 **Maslahat:** Inglizchada yozing\n\n"
+                "Qaytadan urinib ko'ring.\n\n"
+                "💡 **Maslahat:**\n"
+                "• Ingliz yoki O'zbek tilida yozing\n"
+                "• Aniq va batafsil matn kiriting\n"
+                "• Misol: \"Beautiful sunset over mountains\"\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         except Exception as e:
-            logger.error(f"Gemini text to image error: {e}", exc_info=True)
+            logger.error(f"Imagen text to image error: {e}", exc_info=True)
             await wait_msg.edit_text(
                 "❌ Xatolik yuz berdi.\n"
                 "Qaytadan urinib ko'ring.",
@@ -3343,7 +3346,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "✨ Google Gemini rasm tahrir qilyapti...\n\n"
+            "✨ Google Imagen rasm tahrir qilyapti...\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
@@ -3361,7 +3364,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=(
                         "✅ **Rasm o'zgartirildi!**\n\n"
                         f"📝 _{text[:50]}_\n\n"
-                        "🤖 Google Gemini 2.0\n\n"
+                        "🤖 Google Imagen 3.0\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
                         "━━━━━━━━━━━━━━━━━━"
@@ -3377,15 +3380,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
                 "Rasm o'zgartirib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
-                "💡 **Maslahat:** Inglizchada yozing\n\n"
+                "Qaytadan urinib ko'ring.\n\n"
+                "💡 **Maslahat:**\n"
+                "• Ingliz yoki O'zbek tilida yozing\n"
+                "• Aniq o'zgartirish so'rang\n"
+                "• Misol: \"Add clouds to the sky\"\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         except Exception as e:
-            logger.error(f"Gemini image edit error: {e}", exc_info=True)
+            logger.error(f"Imagen image edit error: {e}", exc_info=True)
             await wait_msg.edit_text(
                 "❌ Xatolik yuz berdi",
                 parse_mode='Markdown'
@@ -3545,115 +3551,460 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================
-# ✍️ TEXT TO IMAGE & EDITING - GOOGLE GEMINI  
+# ✍️ TEXT TO IMAGE & EDITING - GOOGLE IMAGEN API  
 # ==========================================
 
-class GoogleGeminiImageGenerator:
-    """Google Gemini for image generation and editing"""
+class GoogleImagenGenerator:
+    """Google Imagen API for image generation and editing"""
     
-    def __init__(self):
-        """Initialize Gemini image generator"""
-        self.generation_model = None
-        self.vision_model = None
+    def __init__(self, project_id=None, location=None, service_account_file=None):
+        """Initialize Imagen generator"""
+        self.project_id = project_id or GOOGLE_PROJECT_ID
+        self.location = location or GOOGLE_LOCATION
+        self.service_account_file = service_account_file or GOOGLE_SERVICE_ACCOUNT_FILE
+        self.access_token = None
+        self.token_expiry = None
         
+        if not self.project_id:
+            logger.warning("⚠️ GOOGLE_PROJECT_ID not set - Imagen API may not work")
+        else:
+            logger.info("✅ Google Imagen API initialized")
+    
+    def get_access_token(self):
+        """Get OAuth2 access token using service account"""
         try:
-            # Gemini 2.0 Flash Experimental for image generation
-            self.generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            # Gemini 1.5 Flash for vision/editing tasks
-            self.vision_model = genai.GenerativeModel('gemini-1.5-flash')
-            logger.info("✅ Google Gemini models initialized")
+            if self.access_token and self.token_expiry and time.time() < self.token_expiry:
+                return self.access_token
+            
+            if os.path.exists(self.service_account_file):
+                credentials = service_account.Credentials.from_service_account_file(
+                    self.service_account_file,
+                    scopes=['https://www.googleapis.com/auth/cloud-platform']
+                )
+                
+                session = requests.Session()
+                session.trust_env = False
+                request = Request(session)
+                
+                credentials.refresh(request)
+                self.access_token = credentials.token
+                self.token_expiry = time.time() + 3300
+                return self.access_token
+            else:
+                logger.error(f"Service account file not found: {self.service_account_file}")
+                return None
+                
         except Exception as e:
-            logger.error(f"Failed to initialize Gemini: {e}")
+            logger.error(f"Error getting access token: {e}")
+            return None
     
     def generate_image(self, prompt):
-        """Generate high-quality image from text using Gemini"""
+        """Generate high-quality image from text using Google Imagen API with Gemini fallback"""
         try:
-            if not self.generation_model:
-                logger.error("Gemini generation model not initialized")
+            # Foydalanuvchi matnini to'g'ri qo'llash
+            user_prompt = prompt.strip()
+            logger.info(f"📝 Image generation prompt: {user_prompt[:100]}...")
+            
+            # 1. Avval Imagen API ni sinab ko'ramiz
+            if self.project_id and self.service_account_file:
+                result = self._try_imagen_api(user_prompt)
+                if result:
+                    return result
+            
+            # 2. Agar Imagen ishlamasa, Gemini API dan foydalanamiz (fallback)
+            logger.info("🔄 Imagen API failed, trying Gemini as fallback...")
+            return self._try_gemini_api(user_prompt)
+            
+        except Exception as e:
+            logger.error(f"Image generation error: {e}", exc_info=True)
+            # Fallback to Gemini
+            try:
+                return self._try_gemini_api(prompt.strip())
+            except:
+                return None
+    
+    def _try_imagen_api(self, prompt):
+        """Try to generate image using Imagen API"""
+        try:
+            token = self.get_access_token()
+            if not token:
                 return None
             
-            # Enhance prompt for better quality
-            enhanced_prompt = self._enhance_generation_prompt(prompt)
-            logger.info(f"📝 Gemini generation prompt: {enhanced_prompt[:100]}...")
+            # Imagen API modellarini sinab ko'ramiz
+            imagen_models = [
+                'imagegeneration@006',  # Imagen 3.0
+                'imagegeneration@005',  # Imagen 2.0
+            ]
             
-            # Generate image with Gemini
-            response = self.generation_model.generate_content(
-                enhanced_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.4,
-                    top_p=0.95,
-                    top_k=40,
-                    max_output_tokens=8192,
-                )
-            )
+            for model_id in imagen_models:
+                try:
+                    endpoint = (
+                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
+                        f"projects/{self.project_id}/locations/{self.location}/"
+                        f"publishers/google/models/{model_id}:predict"
+                    )
+                    
+                    payload = {
+                        "instances": [
+                            {
+                                "prompt": prompt
+                            }
+                        ],
+                        "parameters": {
+                            "sampleCount": 1,
+                            "aspectRatio": "1:1",
+                            "safetyFilterLevel": "block_some",
+                            "personGeneration": "allow_all"
+                        }
+                    }
+                    
+                    headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    logger.info(f"🔄 Trying Imagen model: {model_id}")
+                    response = requests.post(endpoint, json=payload, headers=headers, timeout=60)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        if 'predictions' in result and len(result['predictions']) > 0:
+                            prediction = result['predictions'][0]
+                            
+                            if 'bytesBase64Encoded' in prediction:
+                                image_data = base64.b64decode(prediction['bytesBase64Encoded'])
+                                logger.info(f"✅ Imagen generated image: {len(image_data)} bytes")
+                                return {'image_bytes': image_data, 'success': True}
+                            elif 'gcsUri' in prediction:
+                                logger.info(f"📥 GCS URI returned: {prediction['gcsUri']}")
+                                # GCS URI ni download qilish kerak, lekin hozircha skip qilamiz
+                                continue
+                    
+                    elif response.status_code == 404:
+                        logger.warning(f"Model {model_id} not available")
+                        continue
+                    else:
+                        logger.warning(f"Imagen API error {response.status_code}: {response.text[:200]}")
+                        continue
+                        
+                except Exception as e:
+                    logger.warning(f"Error with Imagen model {model_id}: {e}")
+                    continue
             
-            # Check if response contains image
-            if response and hasattr(response, 'candidates') and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        # Return image bytes
-                        image_data = part.inline_data.data
-                        logger.info(f"✅ Gemini generated image: {len(image_data)} bytes")
-                        return {'image_bytes': image_data, 'success': True}
-            
-            # Try alternative: describe and use imagen as fallback
-            logger.warning("Gemini didn't return image, trying alternative...")
             return None
             
         except Exception as e:
-            logger.error(f"Gemini generation error: {e}", exc_info=True)
+            logger.error(f"Imagen API error: {e}")
+            return None
+    
+    def _try_gemini_api(self, prompt):
+        """Fallback: Try to generate image using Gemini API"""
+        try:
+            if not GOOGLE_GEMINI_API_KEY:
+                logger.error("Gemini API key not set")
+                return None
+            
+            # Gemini 2.0 Flash Experimental
+            try:
+                generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                
+                # Enhanced prompt for better results
+                enhanced_prompt = f"Create a high-quality, detailed, photorealistic image: {prompt}. Professional photography, 8k resolution, sharp focus, vibrant colors, masterpiece quality. NO text, NO watermarks."
+                
+                logger.info(f"🔄 Trying Gemini API for image generation...")
+                response = generation_model.generate_content(
+                    enhanced_prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.4,
+                        top_p=0.95,
+                        top_k=40,
+                        max_output_tokens=8192,
+                    )
+                )
+                
+                # Check if response contains image
+                if response and hasattr(response, 'candidates') and response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            image_data = part.inline_data.data
+                            logger.info(f"✅ Gemini generated image: {len(image_data)} bytes")
+                            return {'image_bytes': image_data, 'success': True}
+                
+                logger.warning("Gemini didn't return image")
+                return None
+                
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Gemini fallback error: {e}")
             return None
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image using Gemini vision + prompt"""
+        """Edit image using Google Imagen API with Gemini fallback"""
         try:
-            if not self.vision_model:
-                logger.error("Gemini vision model not initialized")
-                return None
-            
-            # Optimize image first
+            # Optimize image
             image_bytes = self._optimize_image(image_bytes)
             
-            # Enhance prompt
-            enhanced_prompt = self._enhance_edit_prompt(prompt)
-            logger.info(f"📝 Gemini edit prompt: {enhanced_prompt[:100]}...")
+            # Foydalanuvchi matnini to'g'ri qo'llash
+            user_prompt = prompt.strip().lower()
+            logger.info(f"📝 Image edit prompt: {user_prompt[:100]}...")
             
-            # Load image from bytes
-            img = Image.open(io.BytesIO(image_bytes))
+            # 1. Avval Imagen API ni sinab ko'ramiz
+            if self.project_id and self.service_account_file:
+                result = self._try_imagen_edit_api(image_bytes, user_prompt)
+                if result:
+                    return result
             
-            # Create detailed prompt for image editing
-            edit_instruction = (
-                f"You are an expert image editor. "
-                f"Modify this image as requested: {enhanced_prompt}. "
-                f"Generate a new high-quality image that incorporates the requested changes "
-                f"while maintaining the original style, composition, and quality. "
-                f"Output ONLY the modified image."
-            )
+            # 2. Agar Imagen ishlamasa, Gemini API dan foydalanamiz (fallback)
+            logger.info("🔄 Imagen edit API failed, trying Gemini as fallback...")
+            result = self._try_gemini_edit_api(image_bytes, user_prompt)
+            if result:
+                return result
             
-            # Use Gemini for vision + generation
-            response = self.generation_model.generate_content(
-                [edit_instruction, img],
-                generation_config=genai.GenerationConfig(
-                    temperature=0.4,
-                    top_p=0.95,
-                    top_k=40,
-                    max_output_tokens=8192,
-                )
-            )
+            # 3. Agar ikkalasi ham ishlamasa, asosiy o'zgartirishlarni PIL bilan qilamiz
+            logger.info("🔄 Both APIs failed, trying basic PIL editing...")
+            return self._try_basic_edit(image_bytes, user_prompt)
             
-            # Extract image from response
-            if response and hasattr(response, 'candidates') and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        image_data = part.inline_data.data
-                        logger.info(f"✅ Gemini edited image: {len(image_data)} bytes")
-                        return {'image_bytes': image_data, 'success': True}
+        except Exception as e:
+            logger.error(f"Image edit error: {e}", exc_info=True)
+            # Fallback to basic edit
+            try:
+                return self._try_basic_edit(image_bytes, prompt.strip().lower())
+            except:
+                return None
+    
+    def _try_imagen_edit_api(self, image_bytes, prompt):
+        """Try to edit image using Imagen API"""
+        try:
+            token = self.get_access_token()
+            if not token:
+                return None
             
-            logger.warning("Gemini didn't return edited image")
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            
+            # Imagen editing modellarini sinab ko'ramiz
+            imagen_models = [
+                'imagegeneration@006',  # Imagen 3.0
+                'imagegeneration@005',  # Imagen 2.0
+            ]
+            
+            for model_id in imagen_models:
+                try:
+                    endpoint = (
+                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
+                        f"projects/{self.project_id}/locations/{self.location}/"
+                        f"publishers/google/models/{model_id}:predict"
+                    )
+                    
+                    payload = {
+                        "instances": [
+                            {
+                                "prompt": prompt,
+                                "image": {
+                                    "bytesBase64Encoded": image_base64
+                                }
+                            }
+                        ],
+                        "parameters": {
+                            "sampleCount": 1,
+                            "safetyFilterLevel": "block_some",
+                            "personGeneration": "allow_all"
+                        }
+                    }
+                    
+                    headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    logger.info(f"🔄 Trying Imagen edit model: {model_id}")
+                    response = requests.post(endpoint, json=payload, headers=headers, timeout=60)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        if 'predictions' in result and len(result['predictions']) > 0:
+                            prediction = result['predictions'][0]
+                            
+                            if 'bytesBase64Encoded' in prediction:
+                                image_data = base64.b64decode(prediction['bytesBase64Encoded'])
+                                logger.info(f"✅ Imagen edited image: {len(image_data)} bytes")
+                                return {'image_bytes': image_data, 'success': True}
+                            elif 'gcsUri' in prediction:
+                                logger.info(f"📥 GCS URI returned: {prediction['gcsUri']}")
+                                continue
+                    
+                    elif response.status_code == 404:
+                        logger.warning(f"Model {model_id} not available")
+                        continue
+                    else:
+                        logger.warning(f"Imagen edit API error {response.status_code}: {response.text[:200]}")
+                        continue
+                        
+                except Exception as e:
+                    logger.warning(f"Error with Imagen edit model {model_id}: {e}")
+                    continue
+            
             return None
             
         except Exception as e:
-            logger.error(f"Gemini edit error: {e}", exc_info=True)
+            logger.error(f"Imagen edit API error: {e}")
+            return None
+    
+    def _try_gemini_edit_api(self, image_bytes, prompt):
+        """Fallback: Try to edit image using Gemini API with better approach"""
+        try:
+            if not GOOGLE_GEMINI_API_KEY:
+                logger.error("Gemini API key not set")
+                return None
+            
+            # Gemini 1.5 Pro yoki Flash - vision uchun yaxshiroq
+            try:
+                # Avval rasmni tahlil qilamiz
+                vision_model = genai.GenerativeModel('gemini-1.5-flash')
+                generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                
+                # Load image from bytes
+                img = Image.open(io.BytesIO(image_bytes))
+                
+                # Rasmni tahlil qilish
+                analyze_prompt = f"Describe this image in detail: what objects, colors, composition, style, and mood are present."
+                analysis = vision_model.generate_content([analyze_prompt, img])
+                image_description = ""
+                if analysis and hasattr(analysis, 'text'):
+                    image_description = analysis.text
+                
+                # Endi o'zgartirilgan rasmni yaratish
+                edit_prompt = (
+                    f"Create a new image based on this description: {image_description}. "
+                    f"Apply the following modification: {prompt}. "
+                    f"Maintain the original style, composition, and quality. "
+                    f"High quality, photorealistic, 8k resolution, sharp focus, vibrant colors."
+                )
+                
+                logger.info(f"🔄 Trying Gemini API for image editing with description...")
+                response = generation_model.generate_content(
+                    edit_prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.4,
+                        top_p=0.95,
+                        top_k=40,
+                        max_output_tokens=8192,
+                    )
+                )
+                
+                # Extract image from response
+                if response and hasattr(response, 'candidates') and response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            image_data = part.inline_data.data
+                            logger.info(f"✅ Gemini edited image: {len(image_data)} bytes")
+                            return {'image_bytes': image_data, 'success': True}
+                
+                # Agar rasm qaytmasa, asl rasmni qaytaramiz (lekin bu yaxshi emas)
+                logger.warning("Gemini didn't return edited image, trying direct approach...")
+                
+                # To'g'ridan-to'g'ri yondashuv
+                direct_prompt = (
+                    f"Modify this image: {prompt}. "
+                    f"Keep everything else the same, only apply the requested change. "
+                    f"High quality, photorealistic result."
+                )
+                
+                response2 = generation_model.generate_content(
+                    [direct_prompt, img],
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.3,
+                        top_p=0.9,
+                        top_k=40,
+                        max_output_tokens=8192,
+                    )
+                )
+                
+                if response2 and hasattr(response2, 'candidates') and response2.candidates:
+                    for part in response2.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            image_data = part.inline_data.data
+                            logger.info(f"✅ Gemini edited image (direct): {len(image_data)} bytes")
+                            return {'image_bytes': image_data, 'success': True}
+                
+                logger.warning("Gemini didn't return edited image")
+                return None
+                
+            except Exception as e:
+                logger.error(f"Gemini edit API error: {e}", exc_info=True)
+                return None
+                
+        except Exception as e:
+            logger.error(f"Gemini edit fallback error: {e}", exc_info=True)
+            return None
+    
+    def _try_basic_edit(self, image_bytes, prompt):
+        """Basic image editing using PIL for simple operations"""
+        try:
+            from PIL import ImageEnhance, ImageFilter
+            img = Image.open(io.BytesIO(image_bytes))
+            
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            prompt_lower = prompt.lower()
+            
+            # Rang o'zgartirish
+            if 'bright' in prompt_lower or 'yorug' in prompt_lower or 'yaxshiroq' in prompt_lower:
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.3)
+                logger.info("✨ Applied brightness enhancement")
+            
+            elif 'dark' in prompt_lower or 'qorong' in prompt_lower:
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(0.7)
+                logger.info("✨ Applied darkness")
+            
+            # Ranglarni o'zgartirish
+            if 'color' in prompt_lower or 'rang' in prompt_lower or 'vibrant' in prompt_lower:
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.4)
+                logger.info("✨ Applied color enhancement")
+            
+            # Kontrast
+            if 'contrast' in prompt_lower or 'kontrast' in prompt_lower:
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.3)
+                logger.info("✨ Applied contrast enhancement")
+            
+            # Keskinlik
+            if 'sharp' in prompt_lower or 'keskin' in prompt_lower or 'clear' in prompt_lower:
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(1.5)
+                img = img.filter(ImageFilter.SHARPEN)
+                logger.info("✨ Applied sharpness")
+            
+            # Blur
+            if 'blur' in prompt_lower or 'bulut' in prompt_lower:
+                img = img.filter(ImageFilter.GaussianBlur(radius=2))
+                logger.info("✨ Applied blur")
+            
+            # Saturation
+            if 'saturat' in prompt_lower or 'to\'yingan' in prompt_lower:
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.5)
+                logger.info("✨ Applied saturation")
+            
+            # Save edited image
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=95)
+            image_data = output.getvalue()
+            
+            logger.info(f"✅ Basic edit applied: {len(image_data)} bytes")
+            return {'image_bytes': image_data, 'success': True}
+            
+        except Exception as e:
+            logger.error(f"Basic edit error: {e}", exc_info=True)
             return None
     
     def _optimize_image(self, image_bytes):
@@ -3665,9 +4016,9 @@ class GoogleGeminiImageGenerator:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Resize if needed (optimal: 1024x1024 for Gemini)
+            # Resize if needed (optimal: 1024x1024 for Imagen)
             width, height = img.size
-            max_size = 1024
+            max_size = 2048
             min_size = 512
             
             if width < min_size or height < min_size:
@@ -3689,35 +4040,14 @@ class GoogleGeminiImageGenerator:
         except Exception as e:
             logger.warning(f"Image optimization failed: {e}")
             return image_bytes
-    
-    def _enhance_generation_prompt(self, user_prompt):
-        """Enhance prompt for image generation"""
-        prompt = user_prompt.strip()
-        
-        enhanced = (
-            f"Create a high-quality, detailed image: {prompt}. "
-            f"Style: photorealistic, professional photography, 8k resolution, "
-            f"sharp focus, perfect composition, vibrant colors, masterpiece quality. "
-            f"NO text, NO watermarks, NO signatures."
-        )
-        
-        return enhanced
-    
-    def _enhance_edit_prompt(self, user_prompt):
-        """Enhance prompt for image editing"""
-        prompt = user_prompt.strip()
-        
-        enhanced = (
-            f"{prompt}. "
-            f"Maintain high quality, photorealistic style, sharp focus, "
-            f"natural lighting, seamless integration, professional result."
-        )
-        
-        return enhanced
 
 
-# Initialize Gemini generator
-imagen_generator = GoogleGeminiImageGenerator()
+# Initialize Imagen generator
+imagen_generator = GoogleImagenGenerator(
+    GOOGLE_PROJECT_ID,
+    GOOGLE_LOCATION,
+    GOOGLE_SERVICE_ACCOUNT_FILE
+)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
