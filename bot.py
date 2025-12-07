@@ -1695,7 +1695,7 @@ veo_generator = GoogleVeoVideoGenerator(
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for /start command - MENYU BILAN"""
+    """Handler for /start command - ASOSIY MENYU"""
     user = update.effective_user
     
     # Foydalanuvchini bazaga qo'shish
@@ -1705,12 +1705,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_admin = user.id in ADMIN_IDS
     admin_badge = " 👑" if is_admin else ""
     
-    # Cheklov yoki admin status
-    if is_admin:
-        cheklov_text = "👑 **Siz Admin!**\n⚡ Cheklovsiz video yaratish\n✨ Unlimited quvvat!"
-    else:
-        cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video\n💡 Kuting, keyin qayta urinib ko'ring!"
-    
     welcome_message = (
         f"╔══════════════════════╗\n"
         f"║ 🎬 **Jonlantir AI** {admin_badge} ║\n"
@@ -1719,55 +1713,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👋 Salom, **{user.first_name}**!\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "✨ **NIMA QILISH MUMKIN?**\n"
+        "✨ **ASOSIY MENYU**\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        "📸 **Rasm yubor** → 🎬 **Video olish**\n\n"
-        
-        "🤖 *AI rasmni jonli videoga aylantiradi!*\n"
-        "🗣️ *O'zbek tilida suhbatlashadi*\n"
-        "✨ *HD sifatda video*\n\n"
-        
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎭 **VIDEO OVOZLARI:**\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        "👴 **Bobo** — Hikmat va kisloviy ovoz\n"
-        "👵 **Buvi** — Sabab va mehribonlik\n"
-        "👨 **Ota** — Kuchli va haqiqiy ovoz\n"
-        "💕 **Ona** — Mehr va iltifo\n"
-        "👦 **Bola** — Quvonch va energiya\n"
-        "👥 **Oila** — Birga suhbat\n\n"
-        
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{cheklov_text}\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        "🎯 **BOSHLAYLIK!**\n"
-        "👇 **Pastdagi tugmani bosing yoki rasm yubor**\n\n"
+        "🎬 **Rasm → Video** — Rasmni videoga\n"
+        "✍️ **Matn → Rasm** — Matndan rasm\n"
+        "🎨 **Rasmni O'zgartir** — AI editing\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
         "━━━━━━━━━━━━━━━━━━━━━━"
     )
     
-    # MENYU TUGMALARI
+    # ASOSIY MENYU TUGMALARI
     keyboard = [
         [
-            InlineKeyboardButton("📸 Rasm Yuboring", callback_data="wait_for_photo")
+            InlineKeyboardButton("🎬 Rasm → Video", callback_data="menu_image_to_video")
         ],
         [
-            InlineKeyboardButton("🎬 Video Yaratish", callback_data="create_video"),
-            InlineKeyboardButton("📁 KATEGORIYA", callback_data="category_menu")
+            InlineKeyboardButton("✍️ Matn → Rasm", callback_data="menu_text_to_image"),
+            InlineKeyboardButton("🎨 Rasmni O'zgartir", callback_data="menu_edit_image")
         ],
         [
             InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
             InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
         ]
     ]
+    
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("👑 Admin", callback_data="admin_panel")])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
+    
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1780,6 +1759,44 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
     
+    # Check if waiting for photo for editing
+    waiting_for = context.user_data.get('waiting_for')
+    
+    if waiting_for == 'photo_for_edit':
+        # IMAGE EDITING MODE
+        try:
+            file = await context.bot.get_file(photo.file_id)
+            image_url = file.file_path
+            
+            session = requests.Session()
+            session.trust_env = False
+            response = session.get(image_url, timeout=20)
+            response.raise_for_status()
+            image_bytes = response.content
+            
+            # Save image for editing
+            context.user_data['edit_image_bytes'] = image_bytes
+            context.user_data['waiting_for'] = 'edit_instruction'
+            
+            await update.message.reply_text(
+                "✅ **Rasm qabul qilindi!**\n\n"
+                "📝 Endi o'zgartirish matnini yozing:\n\n"
+                "🎨 Misol:\n"
+                "• _\"Osmonga qushlar qo'sh\"_\n"
+                "• _\"Fonni tog'larga o'zgartir\"_\n"
+                "• _\"Odam kulayotgan qil\"_\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            return
+        except Exception as e:
+            logger.error(f"Image save error: {e}")
+            await update.message.reply_text("❌ Xatolik. Qaytadan yuboring.")
+            return
+    
+    # IMAGE TO VIDEO MODE (default)
     # CHEKLOV TEKSHIRUVI (Admin uchun cheklov yo'q)
     can_create, time_left = user_db.can_create_video(user.id)
     
@@ -3095,15 +3112,438 @@ async def scenarios_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for text messages"""
+    """Handler for text messages - TEXT TO IMAGE VA EDIT IMAGE"""
+    user = update.effective_user
+    text = update.message.text
+    
+    # Agar broadcast kutilayotgan bo'lsa, uni handle qilmas
+    if context.user_data.get('waiting_for_broadcast'):
+        return
+    
+    waiting_for = context.user_data.get('waiting_for')
+    
+    # TEXT TO IMAGE
+    if waiting_for == 'text_for_image':
+        wait_msg = await update.message.reply_text(
+            "┏━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
+            "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+            "🎨 AI rasm yaratyapti...\n\n"
+            "⏳ *30-60 soniya...*",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Generate image
+            result = imagen_generator.generate_image(text)
+            
+            if result and 'predictions' in result:
+                # Get first image
+                predictions = result['predictions']
+                if predictions and len(predictions) > 0:
+                    image_data = predictions[0]
+                    
+                    # Image bytes base64 encoded
+                    if 'bytesBase64Encoded' in image_data:
+                        image_base64 = image_data['bytesBase64Encoded']
+                        image_bytes = base64.b64decode(image_base64)
+                        
+                        # Send image
+                        await update.message.reply_photo(
+                            photo=image_bytes,
+                            caption=(
+                                "✅ **Rasm tayyor!**\n\n"
+                                f"📝 _{text[:50]}_\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "🤖 @Jonlantir_Ai_bot\n"
+                                "━━━━━━━━━━━━━━━━━━"
+                            ),
+                            parse_mode='Markdown'
+                        )
+                        
+                        await wait_msg.delete()
+                        context.user_data.pop('waiting_for', None)
+                        return
+            
+            await wait_msg.edit_text(
+                "❌ **Xatolik**\n\n"
+                "Rasm yaratib bo'lmadi.\n"
+                "Boshqa matn kiriting.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Text to image error: {e}")
+            await wait_msg.edit_text(
+                "❌ Xatolik yuz berdi",
+                parse_mode='Markdown'
+            )
+        
+        return
+    
+    # IMAGE EDITING - waiting for edit instruction
+    elif waiting_for == 'edit_instruction':
+        edit_image_bytes = context.user_data.get('edit_image_bytes')
+        
+        if not edit_image_bytes:
+            await update.message.reply_text(
+                "❌ Rasm topilmadi. Qaytadan boshlang.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        wait_msg = await update.message.reply_text(
+            "┏━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
+            "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+            "✨ AI rasm tahrir qilyapti...\n\n"
+            "⏳ *30-60 soniya...*",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Edit image
+            result = imagen_generator.edit_image(edit_image_bytes, text)
+            
+            if result and 'predictions' in result:
+                predictions = result['predictions']
+                if predictions and len(predictions) > 0:
+                    image_data = predictions[0]
+                    
+                    if 'bytesBase64Encoded' in image_data:
+                        image_base64 = image_data['bytesBase64Encoded']
+                        edited_bytes = base64.b64decode(image_base64)
+                        
+                        # Send edited image
+                        await update.message.reply_photo(
+                            photo=edited_bytes,
+                            caption=(
+                                "✅ **Rasm o'zgartirildi!**\n\n"
+                                f"📝 _{text[:50]}_\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "🤖 @Jonlantir_Ai_bot\n"
+                                "━━━━━━━━━━━━━━━━━━"
+                            ),
+                            parse_mode='Markdown'
+                        )
+                        
+                        await wait_msg.delete()
+                        context.user_data.pop('waiting_for', None)
+                        context.user_data.pop('edit_image_bytes', None)
+                        return
+            
+            await wait_msg.edit_text(
+                "❌ **Xatolik**\n\n"
+                "Rasm o'zgartirib bo'lmadi.\n"
+                "Boshqa matn kiriting.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Image edit error: {e}")
+            await wait_msg.edit_text(
+                "❌ Xatolik yuz berdi",
+                parse_mode='Markdown'
+            )
+        
+        return
+    
+    # Default message
     await update.message.reply_text(
         "📸 **Rasm yuboring**\n\n"
-        "🤖 AI uni jonli videoga aylantiradi\n\n"
+        "yoki /start bosing\n\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
         "━━━━━━━━━━━━━━━━━━",
         parse_mode='Markdown'
     )
+
+
+# ==========================================
+# 📋 ASOSIY MENYU HANDLERS
+# ==========================================
+
+async def menu_image_to_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rasm → Video menu"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = (
+        "╔══════════════════════╗\n"
+        "║ 🎬 **RASM → VIDEO** ║\n"
+        "╚══════════════════════╝\n\n"
+        
+        "📸 **Rasmni yuboring**\n\n"
+        
+        "Bot rasmni tahlil qilib:\n"
+        "✅ Jonli videoga aylantiradi\n"
+        "✅ O'zbek tilida gapiradi\n"
+        "✅ HD sifatda yaratadi\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['waiting_for'] = 'photo_for_video'
+
+
+async def menu_text_to_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Matn → Rasm menu"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = (
+        "╔══════════════════════╗\n"
+        "║ ✍️ **MATN → RASM** ║\n"
+        "╚══════════════════════╝\n\n"
+        
+        "✍️ **Matn yozing:**\n\n"
+        
+        "📝 Misol:\n"
+        "• _\"Tog'larda quyosh chiqishi\"_\n"
+        "• _\"Dengiz bo'yida chiroyli uy\"_\n"
+        "• _\"Futuristik shahar\"_\n\n"
+        
+        "✨ AI matndan rasm yaratadi!\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['waiting_for'] = 'text_for_image'
+
+
+async def menu_edit_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rasmni O'zgartirish menu"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = (
+        "╔══════════════════════╗\n"
+        "║ 🎨 **RASMNI O'ZGARTIR** ║\n"
+        "╚══════════════════════╝\n\n"
+        
+        "📸 **Rasmni yuboring**\n\n"
+        
+        "Keyin o'zgartirish matnini:\n"
+        "• Fonga ob'ekt qo'shish\n"
+        "• Ranglarni o'zgartirish\n"
+        "• Stil o'zgartirish\n\n"
+        
+        "📝 Misol:\n"
+        "_\"Osmonga qushlar qo'sh\"_\n"
+        "_\"Fonni tog'larga o'zgartir\"_\n\n"
+        
+        "✨ AI rasmni o'zgartiradi!\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['waiting_for'] = 'photo_for_edit'
+
+
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Asosiy menyuga qaytish"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    is_admin = user.id in ADMIN_IDS
+    admin_badge = " 👑" if is_admin else ""
+    
+    welcome_message = (
+        f"╔══════════════════════╗\n"
+        f"║ 🎬 **Jonlantir AI** {admin_badge} ║\n"
+        f"╚══════════════════════╝\n\n"
+        
+        f"👋 Salom, **{user.first_name}**!\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "✨ **ASOSIY MENYU**\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        "🎬 **Rasm → Video** — Rasmni videoga\n"
+        "✍️ **Matn → Rasm** — Matndan rasm\n"
+        "🎨 **Rasmni O'zgartir** — AI editing\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🎬 Rasm → Video", callback_data="menu_image_to_video")],
+        [InlineKeyboardButton("✍️ Matn → Rasm", callback_data="menu_text_to_image"),
+         InlineKeyboardButton("🎨 Rasmni O'zgartir", callback_data="menu_edit_image")],
+        [InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
+         InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")]
+    ]
+    
+    if is_admin:
+        keyboard.append([InlineKeyboardButton("👑 Admin", callback_data="admin_panel")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    context.user_data.pop('waiting_for', None)
+    context.user_data.pop('edit_image_bytes', None)
+    
+    await query.edit_message_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
+
+
+# ==========================================
+# ✍️ TEXT TO IMAGE - GOOGLE IMAGEN  
+# ==========================================
+
+class GoogleImagenGenerator:
+    def __init__(self, project_id, location, service_account_file):
+        self.project_id = project_id
+        self.location = location
+        self.service_account_file = service_account_file
+        self.access_token = None
+        self.token_expiry = None
+    
+    def get_access_token(self):
+        """Get OAuth2 access token"""
+        try:
+            if self.access_token and self.token_expiry and time.time() < self.token_expiry:
+                return self.access_token
+            
+            if os.path.exists(self.service_account_file):
+                credentials = service_account.Credentials.from_service_account_file(
+                    self.service_account_file,
+                    scopes=['https://www.googleapis.com/auth/cloud-platform']
+                )
+                
+                session = requests.Session()
+                session.trust_env = False
+                request = Request(session)
+                
+                credentials.refresh(request)
+                self.access_token = credentials.token
+                self.token_expiry = time.time() + 3300
+                return self.access_token
+            else:
+                logger.error(f"Service account file not found")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting access token: {e}")
+            return None
+    
+    def generate_image(self, prompt):
+        """Generate image from text"""
+        try:
+            token = self.get_access_token()
+            if not token:
+                return None
+            
+            models = ['imagen-3.0-generate-001', 'imagegeneration@006']
+            
+            for model_id in models:
+                try:
+                    endpoint = (
+                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
+                        f"projects/{self.project_id}/locations/{self.location}/"
+                        f"publishers/google/models/{model_id}:predict"
+                    )
+                    
+                    payload = {
+                        "instances": [{"prompt": prompt}],
+                        "parameters": {"sampleCount": 1}
+                    }
+                    
+                    headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    logger.info(f"🎨 Trying: {model_id}")
+                    
+                    session = requests.Session()
+                    session.trust_env = False
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    
+                    if response.status_code == 200:
+                        logger.info(f"✅ Success: {model_id}")
+                        return response.json()
+                    elif response.status_code != 404:
+                        logger.warning(f"❌ {model_id}: {response.status_code}")
+                except:
+                    continue
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return None
+    
+    def edit_image(self, image_bytes, prompt):
+        """Edit image"""
+        try:
+            token = self.get_access_token()
+            if not token:
+                return None
+            
+            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+            
+            models = ['imagen-3.0-capability-001', 'imagegeneration@006']
+            
+            for model_id in models:
+                try:
+                    endpoint = (
+                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
+                        f"projects/{self.project_id}/locations/{self.location}/"
+                        f"publishers/google/models/{model_id}:predict"
+                    )
+                    
+                    payload = {
+                        "instances": [{
+                            "prompt": prompt,
+                            "image": {"bytesBase64Encoded": image_base64}
+                        }],
+                        "parameters": {"sampleCount": 1}
+                    }
+                    
+                    headers = {
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    logger.info(f"🎨 Editing with: {model_id}")
+                    
+                    session = requests.Session()
+                    session.trust_env = False
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    
+                    if response.status_code == 200:
+                        logger.info(f"✅ Edit success: {model_id}")
+                        return response.json()
+                except:
+                    continue
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            return None
+
+
+# Initialize Imagen generator
+imagen_generator = GoogleImagenGenerator(
+    GOOGLE_PROJECT_ID,
+    GOOGLE_LOCATION,
+    GOOGLE_SERVICE_ACCOUNT_FILE
+)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3165,6 +3605,12 @@ def main():
         application.add_handler(CommandHandler("scenarios", scenarios_command))
         application.add_handler(CommandHandler("admin", admin_panel))
         application.add_handler(CommandHandler("stats", my_stats))
+        
+        # ASOSIY MENYU CALLBACKS - YANGI!
+        application.add_handler(CallbackQueryHandler(menu_image_to_video, pattern="^menu_image_to_video$"))
+        application.add_handler(CallbackQueryHandler(menu_text_to_image, pattern="^menu_text_to_image$"))
+        application.add_handler(CallbackQueryHandler(menu_edit_image, pattern="^menu_edit_image$"))
+        application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"))
         
         # MENYU CALLBACK HANDLERS
         application.add_handler(CallbackQueryHandler(templates_menu, pattern="^templates_menu$"))
