@@ -3749,7 +3749,7 @@ class GoogleImagenGenerator:
             image_bytes = self._optimize_image(image_bytes)
             
             # Foydalanuvchi matnini to'g'ri qo'llash
-            user_prompt = prompt.strip()
+            user_prompt = prompt.strip().lower()
             logger.info(f"📝 Image edit prompt: {user_prompt[:100]}...")
             
             # 1. Avval Imagen API ni sinab ko'ramiz
@@ -3760,13 +3760,19 @@ class GoogleImagenGenerator:
             
             # 2. Agar Imagen ishlamasa, Gemini API dan foydalanamiz (fallback)
             logger.info("🔄 Imagen edit API failed, trying Gemini as fallback...")
-            return self._try_gemini_edit_api(image_bytes, user_prompt)
+            result = self._try_gemini_edit_api(image_bytes, user_prompt)
+            if result:
+                return result
+            
+            # 3. Agar ikkalasi ham ishlamasa, asosiy o'zgartirishlarni PIL bilan qilamiz
+            logger.info("🔄 Both APIs failed, trying basic PIL editing...")
+            return self._try_basic_edit(image_bytes, user_prompt)
             
         except Exception as e:
             logger.error(f"Image edit error: {e}", exc_info=True)
-            # Fallback to Gemini
+            # Fallback to basic edit
             try:
-                return self._try_gemini_edit_api(image_bytes, prompt.strip())
+                return self._try_basic_edit(image_bytes, prompt.strip().lower())
             except:
                 return None
     
@@ -3849,29 +3855,39 @@ class GoogleImagenGenerator:
             return None
     
     def _try_gemini_edit_api(self, image_bytes, prompt):
-        """Fallback: Try to edit image using Gemini API"""
+        """Fallback: Try to edit image using Gemini API with better approach"""
         try:
             if not GOOGLE_GEMINI_API_KEY:
                 logger.error("Gemini API key not set")
                 return None
             
-            # Gemini 2.0 Flash Experimental
+            # Gemini 1.5 Pro yoki Flash - vision uchun yaxshiroq
             try:
+                # Avval rasmni tahlil qilamiz
+                vision_model = genai.GenerativeModel('gemini-1.5-flash')
                 generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 
                 # Load image from bytes
                 img = Image.open(io.BytesIO(image_bytes))
                 
-                # Enhanced prompt for editing
-                edit_instruction = (
-                    f"Modify this image as requested: {prompt}. "
-                    f"Maintain high quality, photorealistic style, sharp focus, "
-                    f"natural lighting, seamless integration. Generate the modified image."
+                # Rasmni tahlil qilish
+                analyze_prompt = f"Describe this image in detail: what objects, colors, composition, style, and mood are present."
+                analysis = vision_model.generate_content([analyze_prompt, img])
+                image_description = ""
+                if analysis and hasattr(analysis, 'text'):
+                    image_description = analysis.text
+                
+                # Endi o'zgartirilgan rasmni yaratish
+                edit_prompt = (
+                    f"Create a new image based on this description: {image_description}. "
+                    f"Apply the following modification: {prompt}. "
+                    f"Maintain the original style, composition, and quality. "
+                    f"High quality, photorealistic, 8k resolution, sharp focus, vibrant colors."
                 )
                 
-                logger.info(f"🔄 Trying Gemini API for image editing...")
+                logger.info(f"🔄 Trying Gemini API for image editing with description...")
                 response = generation_model.generate_content(
-                    [edit_instruction, img],
+                    edit_prompt,
                     generation_config=genai.GenerationConfig(
                         temperature=0.4,
                         top_p=0.95,
@@ -3888,15 +3904,107 @@ class GoogleImagenGenerator:
                             logger.info(f"✅ Gemini edited image: {len(image_data)} bytes")
                             return {'image_bytes': image_data, 'success': True}
                 
+                # Agar rasm qaytmasa, asl rasmni qaytaramiz (lekin bu yaxshi emas)
+                logger.warning("Gemini didn't return edited image, trying direct approach...")
+                
+                # To'g'ridan-to'g'ri yondashuv
+                direct_prompt = (
+                    f"Modify this image: {prompt}. "
+                    f"Keep everything else the same, only apply the requested change. "
+                    f"High quality, photorealistic result."
+                )
+                
+                response2 = generation_model.generate_content(
+                    [direct_prompt, img],
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.3,
+                        top_p=0.9,
+                        top_k=40,
+                        max_output_tokens=8192,
+                    )
+                )
+                
+                if response2 and hasattr(response2, 'candidates') and response2.candidates:
+                    for part in response2.candidates[0].content.parts:
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            image_data = part.inline_data.data
+                            logger.info(f"✅ Gemini edited image (direct): {len(image_data)} bytes")
+                            return {'image_bytes': image_data, 'success': True}
+                
                 logger.warning("Gemini didn't return edited image")
                 return None
                 
             except Exception as e:
-                logger.error(f"Gemini edit API error: {e}")
+                logger.error(f"Gemini edit API error: {e}", exc_info=True)
                 return None
                 
         except Exception as e:
-            logger.error(f"Gemini edit fallback error: {e}")
+            logger.error(f"Gemini edit fallback error: {e}", exc_info=True)
+            return None
+    
+    def _try_basic_edit(self, image_bytes, prompt):
+        """Basic image editing using PIL for simple operations"""
+        try:
+            from PIL import ImageEnhance, ImageFilter
+            img = Image.open(io.BytesIO(image_bytes))
+            
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            prompt_lower = prompt.lower()
+            
+            # Rang o'zgartirish
+            if 'bright' in prompt_lower or 'yorug' in prompt_lower or 'yaxshiroq' in prompt_lower:
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.3)
+                logger.info("✨ Applied brightness enhancement")
+            
+            elif 'dark' in prompt_lower or 'qorong' in prompt_lower:
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(0.7)
+                logger.info("✨ Applied darkness")
+            
+            # Ranglarni o'zgartirish
+            if 'color' in prompt_lower or 'rang' in prompt_lower or 'vibrant' in prompt_lower:
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.4)
+                logger.info("✨ Applied color enhancement")
+            
+            # Kontrast
+            if 'contrast' in prompt_lower or 'kontrast' in prompt_lower:
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.3)
+                logger.info("✨ Applied contrast enhancement")
+            
+            # Keskinlik
+            if 'sharp' in prompt_lower or 'keskin' in prompt_lower or 'clear' in prompt_lower:
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(1.5)
+                img = img.filter(ImageFilter.SHARPEN)
+                logger.info("✨ Applied sharpness")
+            
+            # Blur
+            if 'blur' in prompt_lower or 'bulut' in prompt_lower:
+                img = img.filter(ImageFilter.GaussianBlur(radius=2))
+                logger.info("✨ Applied blur")
+            
+            # Saturation
+            if 'saturat' in prompt_lower or 'to\'yingan' in prompt_lower:
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.5)
+                logger.info("✨ Applied saturation")
+            
+            # Save edited image
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=95)
+            image_data = output.getvalue()
+            
+            logger.info(f"✅ Basic edit applied: {len(image_data)} bytes")
+            return {'image_bytes': image_data, 'success': True}
+            
+        except Exception as e:
+            logger.error(f"Basic edit error: {e}", exc_info=True)
             return None
     
     def _optimize_image(self, image_bytes):
