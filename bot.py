@@ -203,6 +203,106 @@ async def notify_vip_status_if_needed(user, context):
 class ImageAnalyzer:
     def __init__(self, service_account_file):
         self.service_account_file = service_account_file
+        # Keyword weights for lightweight gender/age heuristics
+        self.male_keywords = {
+            'man': 2.0,
+            'male': 2.0,
+            'boy': 1.5,
+            'gentleman': 1.5,
+            'grandfather': 2.0,
+            'groom': 1.5,
+            'husband': 2.0,
+            'father': 2.0,
+            'uncle': 1.7,
+            'beard': 1.5,
+            'mustache': 1.5,
+            'soldier': 1.5,
+            'businessman': 1.5,
+            'king': 1.5
+        }
+        self.female_keywords = {
+            'woman': 2.0,
+            'female': 2.0,
+            'girl': 1.5,
+            'lady': 1.5,
+            'grandmother': 2.0,
+            'bride': 1.5,
+            'wife': 2.0,
+            'mother': 2.0,
+            'queen': 1.5,
+            'sister': 1.2,
+            'aunt': 1.2,
+            'nurse': 1.2,
+            'princess': 1.5,
+            'makeup': 0.8
+        }
+        self.age_keywords = {
+            'elderly': ['elderly', 'senior', 'old', 'grandfather', 'grandmother', 'wrinkle'],
+            'child': ['child', 'baby', 'kid', 'toddler', 'teenager', 'youth', 'boy', 'girl'],
+            'adult': ['adult', 'man', 'woman', 'middle-aged', 'professional']
+        }
+
+    def _score_keywords(self, text, keyword_weights):
+        score = 0.0
+        for keyword, weight in keyword_weights.items():
+            if keyword in text:
+                score += weight
+        return score
+
+    def _detect_gender(self, label_descriptions, web_entities):
+        male_score = 0.0
+        female_score = 0.0
+        for desc in label_descriptions:
+            male_score += self._score_keywords(desc, self.male_keywords)
+            female_score += self._score_keywords(desc, self.female_keywords)
+        for desc in web_entities:
+            male_score += self._score_keywords(desc, self.male_keywords)
+            female_score += self._score_keywords(desc, self.female_keywords)
+        total = male_score + female_score
+        if total == 0:
+            return {'gender': None, 'confidence': 0.0, 'scores': {'male': 0.0, 'female': 0.0}}
+        confidence = abs(male_score - female_score) / total
+        if confidence < 0.25:
+            return {'gender': None, 'confidence': confidence, 'scores': {'male': male_score, 'female': female_score}}
+        gender = 'male' if male_score >= female_score else 'female'
+        return {'gender': gender, 'confidence': confidence, 'scores': {'male': male_score, 'female': female_score}}
+
+    def _detect_age_group(self, label_descriptions):
+        scores = {'elderly': 0, 'child': 0, 'adult': 0}
+        for desc in label_descriptions:
+            for age_key, keywords in self.age_keywords.items():
+                if any(keyword in desc for keyword in keywords):
+                    scores[age_key] += 1
+        if scores['elderly'] > 0 and scores['elderly'] >= scores['child']:
+            return 'elderly'
+        if scores['child'] > 0 and scores['child'] >= scores['adult']:
+            return 'child'
+        if scores['adult'] > 0:
+            return 'adult'
+        return None
+
+    def _likelihood_to_score(self, likelihood):
+        if hasattr(likelihood, "value"):
+            return likelihood.value
+        return int(likelihood) if isinstance(likelihood, int) else 0
+
+    def _detect_dominant_emotion(self, faces):
+        emotion_priority = ['joy', 'sorrow', 'anger', 'surprise']
+        emotion_map = []
+        for face in faces:
+            face_emotions = {
+                'joy': self._likelihood_to_score(face.joy_likelihood),
+                'sorrow': self._likelihood_to_score(face.sorrow_likelihood),
+                'anger': self._likelihood_to_score(face.anger_likelihood),
+                'surprise': self._likelihood_to_score(face.surprise_likelihood)
+            }
+            dominant = max(face_emotions.items(), key=lambda item: item[1])
+            emotion_map.append(dominant)
+        if not emotion_map:
+            return {'emotion': None, 'confidence': 0.0}
+        dominant_emotion, score = max(emotion_map, key=lambda item: item[1])
+        confidence = min(score / 5.0, 1.0)  # Likelihood values go 0-5
+        return {'emotion': dominant_emotion if score > 1 else None, 'confidence': confidence}
         
     def analyze_image(self, image_bytes):
         """Rasmni CHUQUR tahlil qilish - odamlar, sifat, rang"""
@@ -219,13 +319,30 @@ class ImageAnalyzer:
             faces = client.face_detection(image=image).face_annotations
             
             # 2. Label detection (ob'ektlar, vaziyat)
-            labels = client.label_detection(image=image).label_annotations
+            label_response = client.label_detection(image=image)
+            label_annotations = label_response.label_annotations
+            label_descriptions = [
+                annotation.description.lower()
+                for annotation in label_annotations[:25]
+                if getattr(annotation, 'description', None)
+            ]
             
             # 3. Image properties (ranglar, sifat)
             props = client.image_properties(image=image).image_properties_annotation
             
             # 4. Safe search (rasm turi)
             safe = client.safe_search_detection(image=image).safe_search_annotation
+            
+            # 5. Web detection - jinsni aniqlash uchun qo'shimcha kontekst
+            web_entities = []
+            try:
+                web_detection = client.web_detection(image=image).web_detection
+                if web_detection and web_detection.web_entities:
+                    for entity in web_detection.web_entities[:20]:
+                        if entity.description:
+                            web_entities.append(entity.description.lower())
+            except Exception as web_error:
+                logger.warning(f"Web detection skipped: {web_error}")
             
             # Ranglarni tahlil qilish
             dominant_colors = []
@@ -249,25 +366,54 @@ class ImageAnalyzer:
                 if avg_saturation < 20:  # Juda past to'yinganlik = eski rasm
                     is_old_photo = True
             
+            gender_info = self._detect_gender(label_descriptions, web_entities)
+            age_group = self._detect_age_group(label_descriptions)
+            emotion_info = self._detect_dominant_emotion(faces)
+            
             analysis = {
                 'face_count': len(faces),
                 'faces': [],
-                'labels': [label.description.lower() for label in labels[:15]],
+                'labels': label_descriptions[:15],
                 'is_old_photo': is_old_photo,
                 'is_low_quality': is_low_quality,
-                'dominant_colors': dominant_colors
+                'dominant_colors': dominant_colors,
+                'dominant_gender': gender_info.get('gender'),
+                'gender_confidence': gender_info.get('confidence'),
+                'gender_scores': gender_info.get('scores'),
+                'age_group': age_group,
+                'dominant_emotion': emotion_info.get('emotion'),
+                'emotion_confidence': emotion_info.get('confidence'),
+                'web_entities': web_entities[:10]
             }
             
             # Har bir yuzni tahlil qilish
             for face in faces:
+                face_emotions = {
+                    'joy': self._likelihood_to_score(face.joy_likelihood),
+                    'sorrow': self._likelihood_to_score(face.sorrow_likelihood),
+                    'anger': self._likelihood_to_score(face.anger_likelihood),
+                    'surprise': self._likelihood_to_score(face.surprise_likelihood)
+                }
+                dominant_face_emotion, dominant_face_score = max(face_emotions.items(), key=lambda item: item[1])
                 face_info = {
                     'joy': face.joy_likelihood.name,
                     'sorrow': face.sorrow_likelihood.name,
                     'anger': face.anger_likelihood.name,
                     'surprise': face.surprise_likelihood.name,
-                    'headwear': face.headwear_likelihood.name
+                    'headwear': face.headwear_likelihood.name,
+                    'detection_confidence': getattr(face, 'detection_confidence', 0),
+                    'primary_emotion': dominant_face_emotion if dominant_face_score > 1 else 'neutral',
+                    'primary_emotion_score': dominant_face_score
                 }
                 analysis['faces'].append(face_info)
+            
+            if analysis['dominant_gender']:
+                logger.info(
+                    f"🧠 Gender detected: {analysis['dominant_gender']} "
+                    f"(confidence={analysis['gender_confidence']:.2f})"
+                )
+            else:
+                logger.info("🧠 Gender detection inconclusive, falling back to label heuristics")
             
             logger.info(f"📊 Chuqur tahlil: {analysis['face_count']} yuz, eski: {is_old_photo}, label: {analysis['labels'][:3]}")
             return analysis
@@ -328,6 +474,9 @@ class ImageAnalyzer:
         face_count = analysis['face_count']
         faces = analysis['faces']
         labels = analysis['labels']
+        detected_gender = analysis.get('dominant_gender')
+        gender_confidence = analysis.get('gender_confidence', 0)
+        age_group_hint = analysis.get('age_group')
         
         # KENGAYTIRILGAN TAHLIL
         # Yosh toifalari
@@ -338,6 +487,29 @@ class ImageAnalyzer:
         # Jins
         is_woman = any(label in ['woman', 'female', 'lady', 'girl', 'mother', 'wife'] for label in labels)
         is_man = any(label in ['man', 'male', 'gentleman', 'boy', 'father', 'husband'] for label in labels)
+        
+        if age_group_hint == 'elderly':
+            is_elderly = True
+            is_young = False
+        elif age_group_hint == 'child':
+            is_young = True
+            is_elderly = False
+        elif age_group_hint == 'adult':
+            is_middle_aged = True
+        
+        if detected_gender and gender_confidence >= 0.3:
+            if detected_gender == 'female':
+                is_woman = True
+                is_man = False
+            elif detected_gender == 'male':
+                is_man = True
+                is_woman = False
+        elif not is_man and not is_woman and detected_gender:
+            # Agar past ishonchlilik bo'lsa ham, hech bo'lmasa o'sha tomonga og'diramiz
+            if detected_gender == 'female':
+                is_woman = True
+            elif detected_gender == 'male':
+                is_man = True
         
         # Hissiyotlar (kengaytirilgan)
         is_happy = any(face.get('joy') in ['VERY_LIKELY', 'LIKELY'] for face in faces)
