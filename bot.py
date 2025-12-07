@@ -15,6 +15,7 @@ from google.auth.transport.requests import Request
 from PIL import Image
 import io
 from google.cloud import vision
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
@@ -46,6 +47,16 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GOOGLE_PROJECT_ID = os.getenv('GOOGLE_PROJECT_ID')
 GOOGLE_LOCATION = os.getenv('GOOGLE_LOCATION', 'us-central1')
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')  # Gemini API key
+
+# Initialize Gemini
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    logger.info("✅ Gemini API initialized")
+else:
+    gemini_model = None
+    logger.warning("⚠️ GOOGLE_API_KEY not set - Gemini features disabled")
 
 # Admin configuration
 ADMIN_IDS = [5928372261]  # Shu ID bilan faqat Admin huquqlari
@@ -3259,19 +3270,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # TEXT TO IMAGE
     if waiting_for == 'text_for_image':
+        # Avval Gemini bilan promptni tayyorlash
         wait_msg = await update.message.reply_text(
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
-            "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
+            "┃ 🤖 **GEMINI TAHLIL QILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            f"📝 Matn: _{text[:80]}_\n\n"
-            "🎨 AI rasm yaratyapti...\n\n"
-            "⏳ *60-90 soniya kutish...*",
+            f"📝 Sizning matn: _{text[:60]}_\n\n"
+            "🧠 Gemini tushunmoqda...",
             parse_mode='Markdown'
         )
         
         try:
-            # Generate image
+            # Gemini bilan promptni yaxshilash
             logger.info(f"🎨 User {update.effective_user.id} generating image: {text[:50]}")
+            enhanced_prompt = imagen_generator.enhance_prompt_with_gemini(text, is_edit=False)
+            
+            # Foydalanuvchiga Gemini nimani tushunganini ko'rsatish
+            await wait_msg.edit_text(
+                "┏━━━━━━━━━━━━━━━━━━━┓\n"
+                "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
+                "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+                f"📝 Sizning matn: _{text[:50]}_\n\n"
+                f"🤖 Gemini tushundi:\n_{enhanced_prompt[:100]}_\n\n"
+                "🎨 Imagen rasm yaratyapti...\n\n"
+                "⏳ *60-90 soniya kutish...*",
+                parse_mode='Markdown'
+            )
+            
+            # Generate image (already uses enhanced prompt internally)
             result = imagen_generator.generate_image(text)
             
             logger.info(f"📦 Generate result: {result is not None}")
@@ -3297,7 +3323,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             photo=image_bytes,
                             caption=(
                                 "✅ **Rasm tayyor!**\n\n"
-                                f"📝 _{text[:50]}_\n\n"
+                                f"📝 _{text[:40]}_\n"
+                                f"🤖 _{enhanced_prompt[:60]}_\n\n"
                                 "━━━━━━━━━━━━━━━━━━\n"
                                 "🤖 @Jonlantir_Ai_bot\n"
                                 "━━━━━━━━━━━━━━━━━━"
@@ -3317,11 +3344,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await wait_msg.edit_text(
                 "❌ **Rasm yaratib bo'lmadi**\n\n"
+                f"🤖 Gemini tushundi: _{enhanced_prompt[:80]}_\n\n"
                 "🔄 Quyidagilarni sinab ko'ring:\n"
                 "• Boshqa matn yozing\n"
-                "• Inglizcha matn kiriting\n"
                 "• Aniqroq tavsif bering\n\n"
-                "📝 Misol: _\"Beautiful sunset over mountains\"_\n\n"
+                "📝 Misol: _\"Tog'da quyosh chiqishi\"_\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
@@ -3354,19 +3381,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['waiting_for'] = 'photo_for_edit'
             return
         
+        # Avval Gemini bilan promptni tayyorlash
         wait_msg = await update.message.reply_text(
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
-            "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
+            "┃ 🤖 **GEMINI TAHLIL QILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            f"📝 Buyruq: _{text[:80]}_\n\n"
-            "✨ AI rasm tahrir qilyapti...\n\n"
-            "⏳ *60-90 soniya kutish...*",
+            f"📝 Sizning buyruq: _{text[:60]}_\n\n"
+            "🧠 Gemini tushunmoqda...",
             parse_mode='Markdown'
         )
         
         try:
-            # Edit image
+            # Gemini bilan tahrirlash promptini yaxshilash
             logger.info(f"🎨 User {update.effective_user.id} editing image: {text[:50]}")
+            enhanced_prompt = imagen_generator.enhance_prompt_with_gemini(text, is_edit=True)
+            
+            # Foydalanuvchiga Gemini nimani tushunganini ko'rsatish
+            await wait_msg.edit_text(
+                "┏━━━━━━━━━━━━━━━━━━━┓\n"
+                "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
+                "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+                f"📝 Sizning buyruq: _{text[:50]}_\n\n"
+                f"🤖 Gemini tushundi:\n_{enhanced_prompt[:80]}_\n\n"
+                "✨ Imagen rasm tahrir qilyapti...\n\n"
+                "⏳ *60-90 soniya kutish...*",
+                parse_mode='Markdown'
+            )
+            
+            # Edit image (already uses enhanced prompt internally)
             result = imagen_generator.edit_image(edit_image_bytes, text)
             
             logger.info(f"📦 Edit result: {result is not None}")
@@ -3390,7 +3432,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             photo=edited_bytes,
                             caption=(
                                 "✅ **Rasm o'zgartirildi!**\n\n"
-                                f"📝 _{text[:50]}_\n\n"
+                                f"📝 _{text[:40]}_\n"
+                                f"🤖 _{enhanced_prompt[:50]}_\n\n"
                                 "━━━━━━━━━━━━━━━━━━\n"
                                 "🤖 @Jonlantir_Ai_bot\n"
                                 "━━━━━━━━━━━━━━━━━━"
@@ -3411,12 +3454,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await wait_msg.edit_text(
                 "❌ **Rasm o'zgartirib bo'lmadi**\n\n"
+                f"🤖 Gemini tushundi: _{enhanced_prompt[:60]}_\n\n"
                 "🔄 Quyidagilarni sinab ko'ring:\n"
                 "• Boshqa buyruq yozing\n"
-                "• Inglizcha matn kiriting\n"
                 "• Aniqroq ko'rsatma bering\n\n"
-                "📝 Misol: _\"Add birds to the sky\"_\n"
-                "📝 Misol: _\"Make background blue\"_\n\n"
+                "📝 Misol: _\"Osmonga qushlar qo'sh\"_\n"
+                "📝 Misol: _\"Fonni ko'k qil\"_\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
@@ -3626,8 +3669,61 @@ class GoogleImagenGenerator:
             logger.error(f"Error getting access token: {e}")
             return None
     
-    def enhance_prompt(self, prompt):
-        """Promptni ingliz tiliga o'tkazish va yaxshilash"""
+    def enhance_prompt_with_gemini(self, prompt, is_edit=False):
+        """Gemini yordamida promptni ingliz tiliga o'tkazish va yaxshilash"""
+        try:
+            if gemini_model:
+                if is_edit:
+                    # Rasm tahrirlash uchun prompt
+                    gemini_prompt = f"""You are an expert image editing prompt creator. 
+Convert this Uzbek/Russian text to a clear English image editing instruction.
+Make it specific and detailed for AI image editing.
+
+User request: "{prompt}"
+
+Rules:
+- Translate to English
+- Make it a clear editing instruction
+- Be specific about what to change
+- Keep it concise (max 50 words)
+- Only output the English prompt, nothing else
+
+English editing prompt:"""
+                else:
+                    # Rasm yaratish uchun prompt
+                    gemini_prompt = f"""You are an expert image generation prompt creator.
+Convert this Uzbek/Russian text to an amazing English image generation prompt.
+Make it detailed and artistic for AI image generation.
+
+User request: "{prompt}"
+
+Rules:
+- Translate to English
+- Add artistic details (lighting, style, mood, colors)
+- Make it vivid and descriptive
+- Keep it concise (max 80 words)
+- Only output the English prompt, nothing else
+
+English image prompt:"""
+                
+                response = gemini_model.generate_content(gemini_prompt)
+                enhanced = response.text.strip()
+                
+                # Tozalash
+                enhanced = enhanced.replace('"', '').replace("'", "")
+                if enhanced.startswith("English"):
+                    enhanced = enhanced.split(":", 1)[-1].strip()
+                
+                logger.info(f"🤖 Gemini enhanced: '{prompt}' -> '{enhanced}'")
+                return enhanced
+            else:
+                return self.enhance_prompt_fallback(prompt)
+        except Exception as e:
+            logger.error(f"❌ Gemini error: {e}")
+            return self.enhance_prompt_fallback(prompt)
+    
+    def enhance_prompt_fallback(self, prompt):
+        """Gemini ishlamasa oddiy tarjima"""
         # O'zbek so'zlarini inglizchaga tarjima qilish
         translations = {
             "tog'": "mountain", "tog'lar": "mountains", "toglar": "mountains",
@@ -3655,21 +3751,20 @@ class GoogleImagenGenerator:
         for uz, en in translations.items():
             enhanced = enhanced.replace(uz, en)
         
-        # Agar asosan inglizcha bo'lsa original promptni qo'shish
-        result_prompt = f"High quality, detailed, professional: {enhanced}"
-        logger.info(f"🎨 Enhanced prompt: '{prompt}' -> '{result_prompt}'")
+        result_prompt = f"High quality, detailed, professional photograph: {enhanced}"
+        logger.info(f"🎨 Fallback enhanced: '{prompt}' -> '{result_prompt}'")
         return result_prompt
     
     def generate_image(self, prompt):
-        """Generate image from text"""
+        """Generate image from text using Gemini-enhanced prompts"""
         try:
             token = self.get_access_token()
             if not token:
                 logger.error("❌ Token olib bo'lmadi")
                 return None
             
-            # Promptni yaxshilash
-            enhanced_prompt = self.enhance_prompt(prompt)
+            # Gemini bilan promptni yaxshilash
+            enhanced_prompt = self.enhance_prompt_with_gemini(prompt, is_edit=False)
             
             # Imagen 3 modellari
             models = ['imagen-3.0-generate-001', 'imagen-3.0-fast-generate-001', 'imagegeneration@006']
@@ -3728,15 +3823,15 @@ class GoogleImagenGenerator:
             return None
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image with enhanced prompt"""
+        """Edit image with Gemini-enhanced prompt"""
         try:
             token = self.get_access_token()
             if not token:
                 logger.error("❌ Token olib bo'lmadi")
                 return None
             
-            # Promptni yaxshilash
-            enhanced_prompt = self.enhance_prompt(prompt)
+            # Gemini bilan tahrirlash promptini yaxshilash
+            enhanced_prompt = self.enhance_prompt_with_gemini(prompt, is_edit=True)
             
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             
