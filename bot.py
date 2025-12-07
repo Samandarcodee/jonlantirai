@@ -15,6 +15,7 @@ from google.auth.transport.requests import Request
 from PIL import Image
 import io
 from google.cloud import vision
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
@@ -46,6 +47,14 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 GOOGLE_PROJECT_ID = os.getenv('GOOGLE_PROJECT_ID')
 GOOGLE_LOCATION = os.getenv('GOOGLE_LOCATION', 'us-central1')
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json')
+GOOGLE_GEMINI_API_KEY = os.getenv('GOOGLE_GEMINI_API_KEY')
+
+# Configure Google Gemini
+if GOOGLE_GEMINI_API_KEY:
+    genai.configure(api_key=GOOGLE_GEMINI_API_KEY)
+    logger.info("✅ Google Gemini configured")
+else:
+    logger.warning("⚠️ GOOGLE_GEMINI_API_KEY not set!")
 
 # Admin configuration
 ADMIN_IDS = [5928372261]  # Shu ID bilan faqat Admin huquqlari
@@ -3269,56 +3278,51 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "🎨 AI rasm yaratyapti...\n\n"
+            "🎨 Google Gemini rasm yaratyapti...\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
         
         try:
-            # Generate image
+            # Generate image with Gemini
             result = imagen_generator.generate_image(text)
             
-            if result and 'predictions' in result:
-                # Get first image
-                predictions = result['predictions']
-                if predictions and len(predictions) > 0:
-                    image_data = predictions[0]
-                    
-                    # Image bytes base64 encoded
-                    if 'bytesBase64Encoded' in image_data:
-                        image_base64 = image_data['bytesBase64Encoded']
-                        image_bytes = base64.b64decode(image_base64)
-                        
-                        # Send image
-                        await update.message.reply_photo(
-                            photo=image_bytes,
-                            caption=(
-                                "✅ **Rasm tayyor!**\n\n"
-                                f"📝 _{text[:50]}_\n\n"
-                                "━━━━━━━━━━━━━━━━━━\n"
-                                "🤖 @Jonlantir_Ai_bot\n"
-                                "━━━━━━━━━━━━━━━━━━"
-                            ),
-                            parse_mode='Markdown'
-                        )
-                        
-                        await wait_msg.delete()
-                        context.user_data.pop('waiting_for', None)
-                        return
+            if result and result.get('success') and 'image_bytes' in result:
+                image_bytes = result['image_bytes']
+                
+                # Send image
+                await update.message.reply_photo(
+                    photo=image_bytes,
+                    caption=(
+                        "✅ **Rasm tayyor!**\n\n"
+                        f"📝 _{text[:50]}_\n\n"
+                        "🤖 Google Gemini 2.0\n\n"
+                        "━━━━━━━━━━━━━━━━━━\n"
+                        "🤖 @Jonlantir_Ai_bot\n"
+                        "━━━━━━━━━━━━━━━━━━"
+                    ),
+                    parse_mode='Markdown'
+                )
+                
+                await wait_msg.delete()
+                context.user_data.pop('waiting_for', None)
+                return
             
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
                 "Rasm yaratib bo'lmadi.\n"
                 "Boshqa matn kiriting.\n\n"
+                "💡 **Maslahat:** Inglizchada yozing\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         except Exception as e:
-            logger.error(f"Text to image error: {e}")
+            logger.error(f"Gemini text to image error: {e}", exc_info=True)
             await wait_msg.edit_text(
-                "❌ Xatolik yuz berdi",
+                "❌ Xatolik yuz berdi.\n"
+                "Qaytadan urinib ko'ring.",
                 parse_mode='Markdown'
             )
         
@@ -3339,53 +3343,49 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "✨ AI rasm tahrir qilyapti...\n\n"
+            "✨ Google Gemini rasm tahrir qilyapti...\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
         
         try:
-            # Edit image
+            # Edit image with Gemini
             result = imagen_generator.edit_image(edit_image_bytes, text)
             
-            if result and 'predictions' in result:
-                predictions = result['predictions']
-                if predictions and len(predictions) > 0:
-                    image_data = predictions[0]
-                    
-                    if 'bytesBase64Encoded' in image_data:
-                        image_base64 = image_data['bytesBase64Encoded']
-                        edited_bytes = base64.b64decode(image_base64)
-                        
-                        # Send edited image
-                        await update.message.reply_photo(
-                            photo=edited_bytes,
-                            caption=(
-                                "✅ **Rasm o'zgartirildi!**\n\n"
-                                f"📝 _{text[:50]}_\n\n"
-                                "━━━━━━━━━━━━━━━━━━\n"
-                                "🤖 @Jonlantir_Ai_bot\n"
-                                "━━━━━━━━━━━━━━━━━━"
-                            ),
-                            parse_mode='Markdown'
-                        )
-                        
-                        await wait_msg.delete()
-                        context.user_data.pop('waiting_for', None)
-                        context.user_data.pop('edit_image_bytes', None)
-                        return
+            if result and result.get('success') and 'image_bytes' in result:
+                edited_bytes = result['image_bytes']
+                
+                # Send edited image
+                await update.message.reply_photo(
+                    photo=edited_bytes,
+                    caption=(
+                        "✅ **Rasm o'zgartirildi!**\n\n"
+                        f"📝 _{text[:50]}_\n\n"
+                        "🤖 Google Gemini 2.0\n\n"
+                        "━━━━━━━━━━━━━━━━━━\n"
+                        "🤖 @Jonlantir_Ai_bot\n"
+                        "━━━━━━━━━━━━━━━━━━"
+                    ),
+                    parse_mode='Markdown'
+                )
+                
+                await wait_msg.delete()
+                context.user_data.pop('waiting_for', None)
+                context.user_data.pop('edit_image_bytes', None)
+                return
             
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
                 "Rasm o'zgartirib bo'lmadi.\n"
                 "Boshqa matn kiriting.\n\n"
+                "💡 **Maslahat:** Inglizchada yozing\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         except Exception as e:
-            logger.error(f"Image edit error: {e}")
+            logger.error(f"Gemini image edit error: {e}", exc_info=True)
             await wait_msg.edit_text(
                 "❌ Xatolik yuz berdi",
                 parse_mode='Markdown'
@@ -3545,293 +3545,179 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================
-# ✍️ TEXT TO IMAGE - GOOGLE IMAGEN  
+# ✍️ TEXT TO IMAGE & EDITING - GOOGLE GEMINI  
 # ==========================================
 
-class GoogleImagenGenerator:
-    def __init__(self, project_id, location, service_account_file):
-        self.project_id = project_id
-        self.location = location
-        self.service_account_file = service_account_file
-        self.access_token = None
-        self.token_expiry = None
+class GoogleGeminiImageGenerator:
+    """Google Gemini for image generation and editing"""
     
-    def get_access_token(self):
-        """Get OAuth2 access token"""
+    def __init__(self):
+        """Initialize Gemini image generator"""
+        self.generation_model = None
+        self.vision_model = None
+        
         try:
-            if self.access_token and self.token_expiry and time.time() < self.token_expiry:
-                return self.access_token
-            
-            if os.path.exists(self.service_account_file):
-                credentials = service_account.Credentials.from_service_account_file(
-                    self.service_account_file,
-                    scopes=['https://www.googleapis.com/auth/cloud-platform']
-                )
-                
-                session = requests.Session()
-                session.trust_env = False
-                request = Request(session)
-                
-                credentials.refresh(request)
-                self.access_token = credentials.token
-                self.token_expiry = time.time() + 3300
-                return self.access_token
-            else:
-                logger.error(f"Service account file not found")
-                return None
+            # Gemini 2.0 Flash Experimental for image generation
+            self.generation_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            # Gemini 1.5 Flash for vision/editing tasks
+            self.vision_model = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("✅ Google Gemini models initialized")
         except Exception as e:
-            logger.error(f"Error getting access token: {e}")
-            return None
+            logger.error(f"Failed to initialize Gemini: {e}")
     
     def generate_image(self, prompt):
-        """Generate high-quality image from text with enhanced parameters"""
+        """Generate high-quality image from text using Gemini"""
         try:
-            token = self.get_access_token()
-            if not token:
-                logger.error("Failed to get access token")
+            if not self.generation_model:
+                logger.error("Gemini generation model not initialized")
                 return None
             
             # Enhance prompt for better quality
             enhanced_prompt = self._enhance_generation_prompt(prompt)
-            logger.info(f"📝 Enhanced generation prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"📝 Gemini generation prompt: {enhanced_prompt[:100]}...")
             
-            # Try multiple models with optimized parameters
-            models_configs = [
-                {
-                    'model': 'imagen-3.0-generate-001',
-                    'params': {
-                        'sampleCount': 1,
-                        'aspectRatio': '1:1',
-                        'negativePrompt': 'low quality, blurry, distorted, ugly, bad anatomy, watermark, text',
-                        'guidanceScale': 15,
-                        'seed': 0
-                    }
-                },
-                {
-                    'model': 'imagegeneration@006',
-                    'params': {
-                        'sampleCount': 1,
-                        'aspectRatio': '1:1'
-                    }
-                },
-                {
-                    'model': 'imagegeneration@005',
-                    'params': {
-                        'sampleCount': 1
-                    }
-                }
-            ]
+            # Generate image with Gemini
+            response = self.generation_model.generate_content(
+                enhanced_prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.4,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                )
+            )
             
-            for config in models_configs:
-                model_id = config['model']
-                try:
-                    endpoint = (
-                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
-                        f"projects/{self.project_id}/locations/{self.location}/"
-                        f"publishers/google/models/{model_id}:predict"
-                    )
-                    
-                    payload = {
-                        "instances": [{"prompt": enhanced_prompt}],
-                        "parameters": config['params']
-                    }
-                    
-                    headers = {
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    }
-                    
-                    logger.info(f"🎨 Trying model: {model_id}")
-                    
-                    session = requests.Session()
-                    session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
-                    
-                    logger.info(f"Response status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        logger.info(f"✅ Generation success with: {model_id}")
-                        return response.json()
-                    else:
-                        logger.warning(f"❌ {model_id} failed: {response.status_code} - {response.text[:200]}")
-                        
-                except Exception as e:
-                    logger.error(f"Error with {model_id}: {str(e)}")
-                    continue
+            # Check if response contains image
+            if response and hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        # Return image bytes
+                        image_data = part.inline_data.data
+                        logger.info(f"✅ Gemini generated image: {len(image_data)} bytes")
+                        return {'image_bytes': image_data, 'success': True}
             
-            logger.error("All models failed for image generation")
+            # Try alternative: describe and use imagen as fallback
+            logger.warning("Gemini didn't return image, trying alternative...")
             return None
             
         except Exception as e:
-            logger.error(f"Generate image error: {e}", exc_info=True)
+            logger.error(f"Gemini generation error: {e}", exc_info=True)
             return None
-    
-    def _enhance_generation_prompt(self, user_prompt):
-        """Enhance user prompt for better image generation results"""
-        prompt = user_prompt.strip()
-        
-        # Add quality instructions
-        enhanced = (
-            f"{prompt}, "
-            f"high quality, detailed, photorealistic, professional photography, "
-            f"8k resolution, sharp focus, perfect lighting, vibrant colors, masterpiece"
-        )
-        
-        return enhanced
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image with enhanced quality and better prompting"""
+        """Edit image using Gemini vision + prompt"""
         try:
-            token = self.get_access_token()
-            if not token:
-                logger.error("Failed to get access token")
+            if not self.vision_model:
+                logger.error("Gemini vision model not initialized")
                 return None
             
-            # Resize and enhance image for better results
-            from PIL import Image
-            import io
+            # Optimize image first
+            image_bytes = self._optimize_image(image_bytes)
             
-            try:
-                img = Image.open(io.BytesIO(image_bytes))
-                
-                # Convert to RGB if needed
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                
-                # Ensure good quality (min 512x512, max 2048x2048)
-                width, height = img.size
-                max_size = 2048
-                min_size = 512
-                
-                if width < min_size or height < min_size:
-                    # Upscale small images
-                    scale = max(min_size / width, min_size / height)
-                    new_width = int(width * scale)
-                    new_height = int(height * scale)
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    logger.info(f"📐 Upscaled: {width}x{height} → {new_width}x{new_height}")
-                elif width > max_size or height > max_size:
-                    # Downscale large images
-                    scale = min(max_size / width, max_size / height)
-                    new_width = int(width * scale)
-                    new_height = int(height * scale)
-                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    logger.info(f"📐 Downscaled: {width}x{height} → {new_width}x{new_height}")
-                
-                # Save with high quality
-                output = io.BytesIO()
-                img.save(output, format='JPEG', quality=95)
-                image_bytes = output.getvalue()
-                logger.info(f"✅ Image optimized: {len(image_bytes)} bytes")
-                
-            except Exception as e:
-                logger.warning(f"Image preprocessing failed: {e}, using original")
-            
-            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-            
-            # Enhanced prompt with better instructions
+            # Enhance prompt
             enhanced_prompt = self._enhance_edit_prompt(prompt)
-            logger.info(f"📝 Enhanced prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"📝 Gemini edit prompt: {enhanced_prompt[:100]}...")
             
-            # Try multiple models with different configurations
-            models_configs = [
-                {
-                    'model': 'imagen-3.0-generate-001',
-                    'mode': 'edit',
-                    'params': {
-                        'sampleCount': 1,
-                        'aspectRatio': '1:1',
-                        'negativePrompt': 'low quality, blurry, distorted, ugly, bad anatomy',
-                        'guidanceScale': 15
-                    }
-                },
-                {
-                    'model': 'imagegeneration@006',
-                    'mode': 'edit',
-                    'params': {
-                        'sampleCount': 1
-                    }
-                }
-            ]
+            # Load image from bytes
+            img = Image.open(io.BytesIO(image_bytes))
             
-            for config in models_configs:
-                model_id = config['model']
-                try:
-                    endpoint = (
-                        f"https://{self.location}-aiplatform.googleapis.com/v1/"
-                        f"projects/{self.project_id}/locations/{self.location}/"
-                        f"publishers/google/models/{model_id}:predict"
-                    )
-                    
-                    # Build payload based on model
-                    if 'imagen-3.0' in model_id:
-                        payload = {
-                            "instances": [{
-                                "prompt": enhanced_prompt,
-                                "image": {"bytesBase64Encoded": image_base64}
-                            }],
-                            "parameters": config['params']
-                        }
-                    else:
-                        payload = {
-                            "instances": [{
-                                "prompt": enhanced_prompt,
-                                "image": {"bytesBase64Encoded": image_base64}
-                            }],
-                            "parameters": config['params']
-                        }
-                    
-                    headers = {
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    }
-                    
-                    logger.info(f"🎨 Trying model: {model_id}")
-                    
-                    session = requests.Session()
-                    session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
-                    
-                    logger.info(f"Response status: {response.status_code}")
-                    
-                    if response.status_code == 200:
-                        logger.info(f"✅ Edit success with: {model_id}")
-                        return response.json()
-                    else:
-                        logger.warning(f"❌ {model_id} failed: {response.status_code} - {response.text[:200]}")
-                        
-                except Exception as e:
-                    logger.error(f"Error with {model_id}: {str(e)}")
-                    continue
+            # Create detailed prompt for image editing
+            edit_instruction = (
+                f"You are an expert image editor. "
+                f"Modify this image as requested: {enhanced_prompt}. "
+                f"Generate a new high-quality image that incorporates the requested changes "
+                f"while maintaining the original style, composition, and quality. "
+                f"Output ONLY the modified image."
+            )
             
-            logger.error("All models failed for image editing")
+            # Use Gemini for vision + generation
+            response = self.generation_model.generate_content(
+                [edit_instruction, img],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.4,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                )
+            )
+            
+            # Extract image from response
+            if response and hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        image_data = part.inline_data.data
+                        logger.info(f"✅ Gemini edited image: {len(image_data)} bytes")
+                        return {'image_bytes': image_data, 'success': True}
+            
+            logger.warning("Gemini didn't return edited image")
             return None
             
         except Exception as e:
-            logger.error(f"Edit image error: {e}", exc_info=True)
+            logger.error(f"Gemini edit error: {e}", exc_info=True)
             return None
     
-    def _enhance_edit_prompt(self, user_prompt):
-        """Enhance user prompt for better image editing results"""
-        # Clean and enhance the prompt
+    def _optimize_image(self, image_bytes):
+        """Optimize image for better results"""
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+            
+            # Convert to RGB
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Resize if needed (optimal: 1024x1024 for Gemini)
+            width, height = img.size
+            max_size = 1024
+            min_size = 512
+            
+            if width < min_size or height < min_size:
+                scale = max(min_size / width, min_size / height)
+                new_size = (int(width * scale), int(height * scale))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+                logger.info(f"📐 Upscaled: {width}x{height} → {new_size}")
+            elif width > max_size or height > max_size:
+                scale = min(max_size / width, max_size / height)
+                new_size = (int(width * scale), int(height * scale))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+                logger.info(f"📐 Downscaled: {width}x{height} → {new_size}")
+            
+            # Save optimized
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=95)
+            return output.getvalue()
+            
+        except Exception as e:
+            logger.warning(f"Image optimization failed: {e}")
+            return image_bytes
+    
+    def _enhance_generation_prompt(self, user_prompt):
+        """Enhance prompt for image generation"""
         prompt = user_prompt.strip()
         
-        # Add quality and style instructions
+        enhanced = (
+            f"Create a high-quality, detailed image: {prompt}. "
+            f"Style: photorealistic, professional photography, 8k resolution, "
+            f"sharp focus, perfect composition, vibrant colors, masterpiece quality. "
+            f"NO text, NO watermarks, NO signatures."
+        )
+        
+        return enhanced
+    
+    def _enhance_edit_prompt(self, user_prompt):
+        """Enhance prompt for image editing"""
+        prompt = user_prompt.strip()
+        
         enhanced = (
             f"{prompt}. "
-            f"High quality, detailed, photorealistic, professional photography, "
-            f"sharp focus, good lighting, natural colors, maintain original style and quality"
+            f"Maintain high quality, photorealistic style, sharp focus, "
+            f"natural lighting, seamless integration, professional result."
         )
         
         return enhanced
 
 
-# Initialize Imagen generator
-imagen_generator = GoogleImagenGenerator(
-    GOOGLE_PROJECT_ID,
-    GOOGLE_LOCATION,
-    GOOGLE_SERVICE_ACCOUNT_FILE
-)
+# Initialize Gemini generator
+imagen_generator = GoogleGeminiImageGenerator()
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
