@@ -47,8 +47,23 @@ GOOGLE_PROJECT_ID = os.getenv('GOOGLE_PROJECT_ID')
 GOOGLE_LOCATION = os.getenv('GOOGLE_LOCATION', 'us-central1')
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json')
 
-# Admin configuration
+# Admin & VIP configuration
 ADMIN_IDS = [5928372261]  # Shu ID bilan faqat Admin huquqlari
+VIP_VIDEO_IDS = [8071449492]  # Cheklovsiz video uchun maxsus ID
+
+VIP_NOTIFICATION_MESSAGE = (
+    "💎 <b>VIP yangilanishi!</b>\n\n"
+    "Sizning hisobingiz uchun <b>barcha cheklovlar olib tashlandi</b>.\n"
+    "Endi istalgan vaqtda cheksiz video yarata olasiz! 🎬✨"
+)
+
+
+def is_vip_user(user_id: int) -> bool:
+    return user_id in VIP_VIDEO_IDS
+
+
+def has_unlimited_video_access(user_id: int) -> bool:
+    return user_id in ADMIN_IDS or user_id in VIP_VIDEO_IDS
 
 # Video creation limits (6 hours for regular users)
 VIDEO_COOLDOWN_HOURS = 6
@@ -104,8 +119,8 @@ class UserDatabase:
     
     def can_create_video(self, user_id):
         """Check if user can create video (6 hour cooldown)"""
-        # Admin has no limits
-        if user_id in ADMIN_IDS:
+        # Admin va VIP foydalanuvchilarda cheklov yo'q
+        if has_unlimited_video_access(user_id):
             return True, 0
         
         user_id_str = str(user_id)
@@ -149,15 +164,275 @@ class UserDatabase:
             'active_today': active_today
         }
 
+    def has_vip_notification_sent(self, user_id):
+        """VIP xabari yuborilgan yoki yo'qligini tekshirish"""
+        user_id_str = str(user_id)
+        return bool(self.data.get(user_id_str, {}).get('vip_notification_sent'))
+
+    def mark_vip_notification_sent(self, user_id):
+        """VIP xabari yuborilganini bazada qayd qilish"""
+        user_id_str = str(user_id)
+        if user_id_str in self.data:
+            self.data[user_id_str]['vip_notification_sent'] = True
+            self.save_db()
+
 
 # Initialize database
 user_db = UserDatabase(USER_DB_FILE)
+
+
+async def notify_vip_status_if_needed(user, context):
+    """VIP foydalanuvchiga cheklov olib tashlanganini xabar qilish"""
+    if not is_vip_user(user.id):
+        return
+    if user_db.has_vip_notification_sent(user.id):
+        return
+    try:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=VIP_NOTIFICATION_MESSAGE,
+            parse_mode='HTML'
+        )
+        user_db.mark_vip_notification_sent(user.id)
+        logger.info(f"💎 VIP xabari yuborildi: {user.id}")
+    except Exception as e:
+        logger.warning(f"VIP xabarini yuborib bo'lmadi ({user.id}): {e}")
 
 
 # Rasmni tahlil qilish va mos prompt yaratish uchun yordamchi funksiya
 class ImageAnalyzer:
     def __init__(self, service_account_file):
         self.service_account_file = service_account_file
+        # Keyword weights for lightweight gender/age heuristics
+        self.male_keywords = {
+            'man': 2.0,
+            'male': 2.0,
+            'boy': 1.5,
+            'gentleman': 1.5,
+            'grandfather': 2.0,
+            'groom': 1.5,
+            'husband': 2.0,
+            'father': 2.0,
+            'uncle': 1.7,
+            'beard': 1.5,
+            'mustache': 1.5,
+            'soldier': 1.5,
+            'businessman': 1.5,
+            'king': 1.5
+        }
+        self.female_keywords = {
+            'woman': 2.0,
+            'female': 2.0,
+            'girl': 1.5,
+            'lady': 1.5,
+            'grandmother': 2.0,
+            'bride': 1.5,
+            'wife': 2.0,
+            'mother': 2.0,
+            'queen': 1.5,
+            'sister': 1.2,
+            'aunt': 1.2,
+            'nurse': 1.2,
+            'princess': 1.5,
+            'makeup': 0.8
+        }
+        self.age_keywords = {
+            'elderly': ['elderly', 'senior', 'old', 'grandfather', 'grandmother', 'wrinkle'],
+            'child': ['child', 'baby', 'kid', 'toddler', 'teenager', 'youth', 'boy', 'girl'],
+            'adult': ['adult', 'man', 'woman', 'middle-aged', 'professional']
+        }
+        self.visual_feature_keywords = {
+            'beard': ['beard', 'mustache', 'goatee'],
+            'glasses': ['glasses', 'eyeglasses', 'sunglasses', 'spectacles'],
+            'headwear': ['hat', 'cap', 'headwear', 'headscarf', 'turban', 'helmet'],
+            'traditional': ['traditional', 'national costume', 'dress', 'robe', 'kimono', 'sari', 'uzbek', 'chapan'],
+            'formal': ['suit', 'tie', 'tuxedo', 'formal', 'business'],
+            'casual': ['t-shirt', 'hoodie', 'casual', 'jeans']
+        }
+
+    def _score_keywords(self, text, keyword_weights):
+        score = 0.0
+        for keyword, weight in keyword_weights.items():
+            if keyword in text:
+                score += weight
+        return score
+
+    def _detect_gender(self, label_descriptions, web_entities):
+        male_score = 0.0
+        female_score = 0.0
+        for desc in label_descriptions:
+            male_score += self._score_keywords(desc, self.male_keywords)
+            female_score += self._score_keywords(desc, self.female_keywords)
+        for desc in web_entities:
+            male_score += self._score_keywords(desc, self.male_keywords)
+            female_score += self._score_keywords(desc, self.female_keywords)
+        total = male_score + female_score
+        if total == 0:
+            return {'gender': None, 'confidence': 0.0, 'scores': {'male': 0.0, 'female': 0.0}}
+        confidence = abs(male_score - female_score) / total
+        if confidence < 0.25:
+            return {'gender': None, 'confidence': confidence, 'scores': {'male': male_score, 'female': female_score}}
+        gender = 'male' if male_score >= female_score else 'female'
+        return {'gender': gender, 'confidence': confidence, 'scores': {'male': male_score, 'female': female_score}}
+
+    def _detect_age_group(self, label_descriptions):
+        scores = {'elderly': 0, 'child': 0, 'adult': 0}
+        for desc in label_descriptions:
+            for age_key, keywords in self.age_keywords.items():
+                if any(keyword in desc for keyword in keywords):
+                    scores[age_key] += 1
+        if scores['elderly'] > 0 and scores['elderly'] >= scores['child']:
+            return 'elderly'
+        if scores['child'] > 0 and scores['child'] >= scores['adult']:
+            return 'child'
+        if scores['adult'] > 0:
+            return 'adult'
+        return None
+
+    def _likelihood_to_score(self, likelihood):
+        if hasattr(likelihood, "value"):
+            return likelihood.value
+        return int(likelihood) if isinstance(likelihood, int) else 0
+
+    def _detect_dominant_emotion(self, faces):
+        emotion_priority = ['joy', 'sorrow', 'anger', 'surprise']
+        emotion_map = []
+        for face in faces:
+            face_emotions = {
+                'joy': self._likelihood_to_score(face.joy_likelihood),
+                'sorrow': self._likelihood_to_score(face.sorrow_likelihood),
+                'anger': self._likelihood_to_score(face.anger_likelihood),
+                'surprise': self._likelihood_to_score(face.surprise_likelihood)
+            }
+            dominant = max(face_emotions.items(), key=lambda item: item[1])
+            emotion_map.append(dominant)
+        if not emotion_map:
+            return {'emotion': None, 'confidence': 0.0}
+        dominant_emotion, score = max(emotion_map, key=lambda item: item[1])
+        confidence = min(score / 5.0, 1.0)  # Likelihood values go 0-5
+        return {'emotion': dominant_emotion if score > 1 else None, 'confidence': confidence}
+
+    def _color_to_name(self, color):
+        r = color.get('r', 0)
+        g = color.get('g', 0)
+        b = color.get('b', 0)
+        avg = (r + g + b) / 3
+        max_channel = max(r, g, b)
+        min_channel = min(r, g, b)
+        if avg > 235:
+            return "very bright/white tones"
+        if avg < 35:
+            return "deep dark tones"
+        if max_channel - min_channel < 15:
+            if avg > 160:
+                return "light gray tones"
+            if avg < 80:
+                return "dark gray tones"
+            return "neutral gray tones"
+        if max_channel == r:
+            return "warm reddish tones"
+        if max_channel == g:
+            return "greenish tones"
+        if max_channel == b:
+            return "cool bluish tones"
+        return "natural color mix"
+
+    def _extract_visual_features(self, analysis):
+        labels = analysis.get('labels', []) if analysis else []
+        label_text = " ".join(labels)
+        features = set()
+        for feature_name, keywords in self.visual_feature_keywords.items():
+            if any(keyword in label_text for keyword in keywords):
+                features.add(feature_name)
+        headwear_present = any(
+            face.get('headwear') in ['VERY_LIKELY', 'LIKELY']
+            for face in (analysis.get('faces', []) if analysis else [])
+        )
+        if headwear_present:
+            features.add('headwear')
+        return features
+
+    def _build_identity_lock_text(self, analysis):
+        if not analysis:
+            return (
+                "IDENTITY LOCK: Use the exact same face from the uploaded reference photo. "
+                "Preserve identical facial structure, skin tone, accessories, and clothing. "
+                "Never swap the person or invent a different face. Animate the photo directly."
+            )
+        
+        gender = analysis.get('dominant_gender')
+        age_group = analysis.get('age_group')
+        
+        gender_text = ""
+        if gender == 'male':
+            gender_text = "Uzbek male"
+        elif gender == 'female':
+            gender_text = "Uzbek female"
+        else:
+            gender_text = "Uzbek person"
+        
+        age_text = ""
+        if age_group == 'elderly':
+            age_text = "elderly"
+        elif age_group == 'child':
+            age_text = "young"
+        elif age_group == 'adult':
+            age_text = "adult"
+        
+        age_gender_desc = f"{age_text} {gender_text}".strip()
+        if not age_gender_desc:
+            age_gender_desc = "Uzbek person"
+        
+        features = self._extract_visual_features(analysis)
+        feature_phrases = []
+        if 'beard' in features:
+            feature_phrases.append("facial hair/beard")
+        if 'glasses' in features:
+            feature_phrases.append("glasses")
+        if 'headwear' in features:
+            feature_phrases.append("headwear/ro'mol")
+        if 'traditional' in features:
+            feature_phrases.append("traditional clothing")
+        if 'formal' in features:
+            feature_phrases.append("formal outfit")
+        if 'casual' in features:
+            feature_phrases.append("casual outfit")
+        
+        dominant_colors = analysis.get('dominant_colors', [])
+        if dominant_colors:
+            color_names = []
+            for color in dominant_colors:
+                color_name = self._color_to_name(color)
+                if color_name not in color_names:
+                    color_names.append(color_name)
+            if color_names:
+                feature_phrases.append(f"color palette ({', '.join(color_names[:2])})")
+        
+        features_text = ""
+        if feature_phrases:
+            features_text = " Preserve " + ", ".join(feature_phrases) + "."
+        
+        lock_text = (
+            f"IDENTITY LOCK: Animate the exact same {age_gender_desc} face from the reference photo. "
+            "Use the provided image pixels as the base so the person never changes. "
+            "Maintain identical facial structure, skin tone, hair, and accessories." + features_text +
+            " Do NOT swap or hallucinate a different person. All frames must clearly look like the original face."
+        )
+        return lock_text
+
+    def apply_identity_lock(self, style, analysis):
+        if not style:
+            return style
+        lock_text = self._build_identity_lock_text(analysis)
+        if not lock_text:
+            return style
+        updated_style = dict(style)
+        existing_prompt = updated_style.get('prompt', "")
+        if existing_prompt:
+            updated_style['prompt'] = f"{lock_text}\n{existing_prompt}"
+        else:
+            updated_style['prompt'] = lock_text
+        return updated_style
         
     def analyze_image(self, image_bytes):
         """Rasmni CHUQUR tahlil qilish - odamlar, sifat, rang"""
@@ -174,13 +449,30 @@ class ImageAnalyzer:
             faces = client.face_detection(image=image).face_annotations
             
             # 2. Label detection (ob'ektlar, vaziyat)
-            labels = client.label_detection(image=image).label_annotations
+            label_response = client.label_detection(image=image)
+            label_annotations = label_response.label_annotations
+            label_descriptions = [
+                annotation.description.lower()
+                for annotation in label_annotations[:25]
+                if getattr(annotation, 'description', None)
+            ]
             
             # 3. Image properties (ranglar, sifat)
             props = client.image_properties(image=image).image_properties_annotation
             
             # 4. Safe search (rasm turi)
             safe = client.safe_search_detection(image=image).safe_search_annotation
+            
+            # 5. Web detection - jinsni aniqlash uchun qo'shimcha kontekst
+            web_entities = []
+            try:
+                web_detection = client.web_detection(image=image).web_detection
+                if web_detection and web_detection.web_entities:
+                    for entity in web_detection.web_entities[:20]:
+                        if entity.description:
+                            web_entities.append(entity.description.lower())
+            except Exception as web_error:
+                logger.warning(f"Web detection skipped: {web_error}")
             
             # Ranglarni tahlil qilish
             dominant_colors = []
@@ -204,25 +496,54 @@ class ImageAnalyzer:
                 if avg_saturation < 20:  # Juda past to'yinganlik = eski rasm
                     is_old_photo = True
             
+            gender_info = self._detect_gender(label_descriptions, web_entities)
+            age_group = self._detect_age_group(label_descriptions)
+            emotion_info = self._detect_dominant_emotion(faces)
+            
             analysis = {
                 'face_count': len(faces),
                 'faces': [],
-                'labels': [label.description.lower() for label in labels[:15]],
+                'labels': label_descriptions[:15],
                 'is_old_photo': is_old_photo,
                 'is_low_quality': is_low_quality,
-                'dominant_colors': dominant_colors
+                'dominant_colors': dominant_colors,
+                'dominant_gender': gender_info.get('gender'),
+                'gender_confidence': gender_info.get('confidence'),
+                'gender_scores': gender_info.get('scores'),
+                'age_group': age_group,
+                'dominant_emotion': emotion_info.get('emotion'),
+                'emotion_confidence': emotion_info.get('confidence'),
+                'web_entities': web_entities[:10]
             }
             
             # Har bir yuzni tahlil qilish
             for face in faces:
+                face_emotions = {
+                    'joy': self._likelihood_to_score(face.joy_likelihood),
+                    'sorrow': self._likelihood_to_score(face.sorrow_likelihood),
+                    'anger': self._likelihood_to_score(face.anger_likelihood),
+                    'surprise': self._likelihood_to_score(face.surprise_likelihood)
+                }
+                dominant_face_emotion, dominant_face_score = max(face_emotions.items(), key=lambda item: item[1])
                 face_info = {
                     'joy': face.joy_likelihood.name,
                     'sorrow': face.sorrow_likelihood.name,
                     'anger': face.anger_likelihood.name,
                     'surprise': face.surprise_likelihood.name,
-                    'headwear': face.headwear_likelihood.name
+                    'headwear': face.headwear_likelihood.name,
+                    'detection_confidence': getattr(face, 'detection_confidence', 0),
+                    'primary_emotion': dominant_face_emotion if dominant_face_score > 1 else 'neutral',
+                    'primary_emotion_score': dominant_face_score
                 }
                 analysis['faces'].append(face_info)
+            
+            if analysis['dominant_gender']:
+                logger.info(
+                    f"🧠 Gender detected: {analysis['dominant_gender']} "
+                    f"(confidence={analysis['gender_confidence']:.2f})"
+                )
+            else:
+                logger.info("🧠 Gender detection inconclusive, falling back to label heuristics")
             
             logger.info(f"📊 Chuqur tahlil: {analysis['face_count']} yuz, eski: {is_old_photo}, label: {analysis['labels'][:3]}")
             return analysis
@@ -283,6 +604,9 @@ class ImageAnalyzer:
         face_count = analysis['face_count']
         faces = analysis['faces']
         labels = analysis['labels']
+        detected_gender = analysis.get('dominant_gender')
+        gender_confidence = analysis.get('gender_confidence', 0)
+        age_group_hint = analysis.get('age_group')
         
         # KENGAYTIRILGAN TAHLIL
         # Yosh toifalari
@@ -293,6 +617,29 @@ class ImageAnalyzer:
         # Jins
         is_woman = any(label in ['woman', 'female', 'lady', 'girl', 'mother', 'wife'] for label in labels)
         is_man = any(label in ['man', 'male', 'gentleman', 'boy', 'father', 'husband'] for label in labels)
+        
+        if age_group_hint == 'elderly':
+            is_elderly = True
+            is_young = False
+        elif age_group_hint == 'child':
+            is_young = True
+            is_elderly = False
+        elif age_group_hint == 'adult':
+            is_middle_aged = True
+        
+        if detected_gender and gender_confidence >= 0.3:
+            if detected_gender == 'female':
+                is_woman = True
+                is_man = False
+            elif detected_gender == 'male':
+                is_man = True
+                is_woman = False
+        elif not is_man and not is_woman and detected_gender:
+            # Agar past ishonchlilik bo'lsa ham, hech bo'lmasa o'sha tomonga og'diramiz
+            if detected_gender == 'female':
+                is_woman = True
+            elif detected_gender == 'male':
+                is_man = True
         
         # Hissiyotlar (kengaytirilgan)
         is_happy = any(face.get('joy') in ['VERY_LIKELY', 'LIKELY'] for face in faces)
@@ -1526,19 +1873,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
     
-    # Admin yoki oddiy foydalanuvchi
+    # Admin yoki VIP foydalanuvchi
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = is_vip_user(user.id)
     
-    # Cheklov yoki admin status
+    if is_admin:
+        status_badge = " 👑"
+    elif is_vip:
+        status_badge = " 💎"
+    else:
+        status_badge = ""
+    
+    # Cheklov yoki admin/VIP status
     if is_admin:
         cheklov_text = "👑 **Siz Admin!**\n⚡ Cheklovsiz video yaratish\n✨ Unlimited quvvat!"
+    elif is_vip:
+        cheklov_text = "💎 **VIP STATUS!**\n⚡ Cheklovlar olib tashlandi\n🎬 Hohlagancha video yarating!"
     else:
         cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video\n💡 Kuting, keyin qayta urinib ko'ring!"
     
     welcome_message = (
         f"╔══════════════════════╗\n"
-        f"║ 🎬 **Jonlantir AI** {admin_badge} ║\n"
+        f"║ 🎬 **Jonlantir AI**{status_badge} ║\n"
         f"╚══════════════════════╝\n\n"
         
         f"👋 Salom, **{user.first_name}**!\n\n"
@@ -1593,6 +1949,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
+    
+    if is_vip:
+        await notify_vip_status_if_needed(user, context)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1604,6 +1963,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
+    await notify_vip_status_if_needed(user, context)
     
     # CHEKLOV TEKSHIRUVI (Admin uchun cheklov yo'q)
     can_create, time_left = user_db.can_create_video(user.id)
@@ -1711,6 +2071,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
             selected_style = analyzer.generate_uzbek_prompt(analysis)
+        
+        if selected_style:
+            selected_style = analyzer.apply_identity_lock(selected_style, analysis)
         
         # DEBUG LOG
         logger.info(f"🎭 Selected scenario: {selected_style['name']}")
@@ -1858,10 +2221,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Keyingi video uchun vaqtni hisoblash
                 is_admin = user.id in ADMIN_IDS
+                is_vip = is_vip_user(user.id)
+                has_unlimited = has_unlimited_video_access(user.id)
                 next_video_time = ""
                 
-                if not is_admin:
+                if not has_unlimited:
                     next_video_time = f"\n\n⏰ **Keyingi video:** {VIDEO_COOLDOWN_HOURS} soatdan keyin"
+                elif is_admin:
+                    next_video_time = "\n\n✅ **Hozir video yarata olasiz!** (Admin)"
+                else:
+                    next_video_time = "\n\n✅ **Hozir video yarata olasiz!** (VIP)"
                 
                 # CHIROYLI CAPTION BOT LINKI BILAN
                 caption = (
@@ -2247,15 +2616,25 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = is_vip_user(user.id)
+    has_unlimited = has_unlimited_video_access(user.id)
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        status = "💎 **VIP** (Cheklovsiz)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create and not has_unlimited:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
         next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
+    elif is_vip:
+        next_video = "\n✅ **Hozir video yarata olasiz!** (VIP)"
     else:
         next_video = "\n✅ **Hozir video yarata olasiz!**"
     
@@ -2721,15 +3100,25 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = is_vip_user(user.id)
+    has_unlimited = has_unlimited_video_access(user.id)
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        status = "💎 **VIP** (Cheklovsiz)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create and not has_unlimited:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
         next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
+    elif is_vip:
+        next_video = "\n✅ **Hozir video yarata olasiz!** (VIP)"
     else:
         next_video = "\n✅ **Hozir video yarata olasiz!**"
     
@@ -2786,12 +3175,24 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = is_vip_user(user.id)
     
-    cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video" if not is_admin else "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    if is_admin:
+        status_badge = " 👑"
+    elif is_vip:
+        status_badge = " 💎"
+    else:
+        status_badge = ""
+    
+    if is_admin:
+        cheklov_text = "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    elif is_vip:
+        cheklov_text = "💎 **VIP STATUS:** Cheklovsiz video yaratish!"
+    else:
+        cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video"
     
     main_menu_text = (
-        f"🎬 **Jonlantir AI**{admin_badge}\n\n"
+        f"🎬 **Jonlantir AI**{status_badge}\n\n"
         f"Assalomu alaykum, {user.first_name}!\n\n"
         
         "📸 **Rasm yuboring**\n"
