@@ -47,8 +47,23 @@ GOOGLE_PROJECT_ID = os.getenv('GOOGLE_PROJECT_ID')
 GOOGLE_LOCATION = os.getenv('GOOGLE_LOCATION', 'us-central1')
 GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json')
 
-# Admin configuration
+# Admin & VIP configuration
 ADMIN_IDS = [5928372261]  # Shu ID bilan faqat Admin huquqlari
+VIP_VIDEO_IDS = [8071449492]  # Cheklovsiz video uchun maxsus ID
+
+VIP_NOTIFICATION_MESSAGE = (
+    "💎 <b>VIP yangilanishi!</b>\n\n"
+    "Sizning hisobingiz uchun <b>barcha cheklovlar olib tashlandi</b>.\n"
+    "Endi istalgan vaqtda cheksiz video yarata olasiz! 🎬✨"
+)
+
+
+def is_vip_user(user_id: int) -> bool:
+    return user_id in VIP_VIDEO_IDS
+
+
+def has_unlimited_video_access(user_id: int) -> bool:
+    return user_id in ADMIN_IDS or user_id in VIP_VIDEO_IDS
 
 # Video creation limits (6 hours for regular users)
 VIDEO_COOLDOWN_HOURS = 6
@@ -104,8 +119,8 @@ class UserDatabase:
     
     def can_create_video(self, user_id):
         """Check if user can create video (6 hour cooldown)"""
-        # Admin has no limits
-        if user_id in ADMIN_IDS:
+        # Admin va VIP foydalanuvchilarda cheklov yo'q
+        if has_unlimited_video_access(user_id):
             return True, 0
         
         user_id_str = str(user_id)
@@ -149,9 +164,39 @@ class UserDatabase:
             'active_today': active_today
         }
 
+    def has_vip_notification_sent(self, user_id):
+        """VIP xabari yuborilgan yoki yo'qligini tekshirish"""
+        user_id_str = str(user_id)
+        return bool(self.data.get(user_id_str, {}).get('vip_notification_sent'))
+
+    def mark_vip_notification_sent(self, user_id):
+        """VIP xabari yuborilganini bazada qayd qilish"""
+        user_id_str = str(user_id)
+        if user_id_str in self.data:
+            self.data[user_id_str]['vip_notification_sent'] = True
+            self.save_db()
+
 
 # Initialize database
 user_db = UserDatabase(USER_DB_FILE)
+
+
+async def notify_vip_status_if_needed(user, context):
+    """VIP foydalanuvchiga cheklov olib tashlanganini xabar qilish"""
+    if not is_vip_user(user.id):
+        return
+    if user_db.has_vip_notification_sent(user.id):
+        return
+    try:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=VIP_NOTIFICATION_MESSAGE,
+            parse_mode='HTML'
+        )
+        user_db.mark_vip_notification_sent(user.id)
+        logger.info(f"💎 VIP xabari yuborildi: {user.id}")
+    except Exception as e:
+        logger.warning(f"VIP xabarini yuborib bo'lmadi ({user.id}): {e}")
 
 
 # Rasmni tahlil qilish va mos prompt yaratish uchun yordamchi funksiya
@@ -1526,19 +1571,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
     
-    # Admin yoki oddiy foydalanuvchi
+    # Admin yoki VIP foydalanuvchi
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = is_vip_user(user.id)
     
-    # Cheklov yoki admin status
+    if is_admin:
+        status_badge = " 👑"
+    elif is_vip:
+        status_badge = " 💎"
+    else:
+        status_badge = ""
+    
+    # Cheklov yoki admin/VIP status
     if is_admin:
         cheklov_text = "👑 **Siz Admin!**\n⚡ Cheklovsiz video yaratish\n✨ Unlimited quvvat!"
+    elif is_vip:
+        cheklov_text = "💎 **VIP STATUS!**\n⚡ Cheklovlar olib tashlandi\n🎬 Hohlagancha video yarating!"
     else:
         cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video\n💡 Kuting, keyin qayta urinib ko'ring!"
     
     welcome_message = (
         f"╔══════════════════════╗\n"
-        f"║ 🎬 **Jonlantir AI** {admin_badge} ║\n"
+        f"║ 🎬 **Jonlantir AI**{status_badge} ║\n"
         f"╚══════════════════════╝\n\n"
         
         f"👋 Salom, **{user.first_name}**!\n\n"
@@ -1593,6 +1647,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
+    
+    if is_vip:
+        await notify_vip_status_if_needed(user, context)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1604,6 +1661,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
+    await notify_vip_status_if_needed(user, context)
     
     # CHEKLOV TEKSHIRUVI (Admin uchun cheklov yo'q)
     can_create, time_left = user_db.can_create_video(user.id)
@@ -1858,10 +1916,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Keyingi video uchun vaqtni hisoblash
                 is_admin = user.id in ADMIN_IDS
+                is_vip = is_vip_user(user.id)
+                has_unlimited = has_unlimited_video_access(user.id)
                 next_video_time = ""
                 
-                if not is_admin:
+                if not has_unlimited:
                     next_video_time = f"\n\n⏰ **Keyingi video:** {VIDEO_COOLDOWN_HOURS} soatdan keyin"
+                elif is_admin:
+                    next_video_time = "\n\n✅ **Hozir video yarata olasiz!** (Admin)"
+                else:
+                    next_video_time = "\n\n✅ **Hozir video yarata olasiz!** (VIP)"
                 
                 # CHIROYLI CAPTION BOT LINKI BILAN
                 caption = (
@@ -2247,15 +2311,25 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = is_vip_user(user.id)
+    has_unlimited = has_unlimited_video_access(user.id)
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        status = "💎 **VIP** (Cheklovsiz)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create and not has_unlimited:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
         next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
+    elif is_vip:
+        next_video = "\n✅ **Hozir video yarata olasiz!** (VIP)"
     else:
         next_video = "\n✅ **Hozir video yarata olasiz!**"
     
@@ -2721,15 +2795,25 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     can_create, time_left = user_db.can_create_video(user.id)
     
     is_admin = user.id in ADMIN_IDS
-    status = "👑 **ADMIN** (Cheklovsiz)" if is_admin else "👤 **Oddiy foydalanuvchi**"
+    is_vip = is_vip_user(user.id)
+    has_unlimited = has_unlimited_video_access(user.id)
+    
+    if is_admin:
+        status = "👑 **ADMIN** (Cheklovsiz)"
+    elif is_vip:
+        status = "💎 **VIP** (Cheklovsiz)"
+    else:
+        status = "👤 **Oddiy foydalanuvchi**"
     
     next_video = ""
-    if not can_create and not is_admin:
+    if not can_create and not has_unlimited:
         hours = int(time_left // 3600)
         minutes = int((time_left % 3600) // 60)
         next_video = f"\n⏰ **Keyingi video:** {hours} soat {minutes} daqiqadan keyin"
     elif is_admin:
         next_video = "\n✅ **Hozir video yarata olasiz!** (Admin)"
+    elif is_vip:
+        next_video = "\n✅ **Hozir video yarata olasiz!** (VIP)"
     else:
         next_video = "\n✅ **Hozir video yarata olasiz!**"
     
@@ -2786,12 +2870,24 @@ async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
-    admin_badge = " 👑" if is_admin else ""
+    is_vip = is_vip_user(user.id)
     
-    cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video" if not is_admin else "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    if is_admin:
+        status_badge = " 👑"
+    elif is_vip:
+        status_badge = " 💎"
+    else:
+        status_badge = ""
+    
+    if is_admin:
+        cheklov_text = "👑 **Siz Admin:** Cheklovsiz video yaratish!"
+    elif is_vip:
+        cheklov_text = "💎 **VIP STATUS:** Cheklovsiz video yaratish!"
+    else:
+        cheklov_text = "⏰ **Cheklov:** Har 6 soatda 1 ta video"
     
     main_menu_text = (
-        f"🎬 **Jonlantir AI**{admin_badge}\n\n"
+        f"🎬 **Jonlantir AI**{status_badge}\n\n"
         f"Assalomu alaykum, {user.first_name}!\n\n"
         
         "📸 **Rasm yuboring**\n"
