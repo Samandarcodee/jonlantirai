@@ -160,7 +160,7 @@ class ImageAnalyzer:
         self.service_account_file = service_account_file
         
     def analyze_image(self, image_bytes):
-        """Rasmni CHUQUR tahlil qilish - odamlar, sifat, rang"""
+        """Rasmni CHUQUR tahlil qilish - odamlar, sifat, rang, holat"""
         try:
             # Vision API client
             credentials = service_account.Credentials.from_service_account_file(
@@ -182,35 +182,85 @@ class ImageAnalyzer:
             # 4. Safe search (rasm turi)
             safe = client.safe_search_detection(image=image).safe_search_annotation
             
+            # 5. Text detection (matn bormi?)
+            texts = client.text_detection(image=image).text_annotations
+            
             # Ranglarni tahlil qilish
             dominant_colors = []
             if props and props.dominant_colors:
-                for color in props.dominant_colors.colors[:3]:
+                for color in props.dominant_colors.colors[:5]:  # Ko'proq rang tahlili
                     rgb = color.color
                     dominant_colors.append({
                         'r': rgb.red,
                         'g': rgb.green,
                         'b': rgb.blue,
-                        'score': color.score
+                        'score': color.score,
+                        'pixel_fraction': color.pixel_fraction
                     })
             
-            # Rasm eski/xira ekanligini aniqlash
+            # KENGAYTIRILGAN TAHLIL: Rasm holati va sifati
             is_old_photo = False
             is_low_quality = False
+            is_black_white = False
+            is_sepia = False
+            is_faded = False
+            brightness_level = 'normal'
             
-            # Agar ranglar juda kam yoki kulrang bo'lsa - eski rasm
+            # PIL bilan rasmni ochish va qo'shimcha tahlil
+            img_pil = Image.open(io.BytesIO(image_bytes))
+            img_width, img_height = img_pil.size
+            total_pixels = img_width * img_height
+            
+            # Sifat aniqlash (o'lcham va piksel bo'yicha)
+            if img_width < 400 or img_height < 400:
+                is_low_quality = True
+            elif total_pixels < 300000:  # 300k pikseldan kam
+                is_low_quality = True
+            
+            # Ranglarni tekshirish
             if dominant_colors:
-                avg_saturation = sum([abs(c['r'] - c['g']) + abs(c['g'] - c['b']) for c in dominant_colors]) / len(dominant_colors) / 3
-                if avg_saturation < 20:  # Juda past to'yinganlik = eski rasm
+                # Kulrang/qora-oq aniqlash
+                color_variance = []
+                for c in dominant_colors[:3]:
+                    variance = abs(c['r'] - c['g']) + abs(c['g'] - c['b']) + abs(c['r'] - c['b'])
+                    color_variance.append(variance)
+                
+                avg_variance = sum(color_variance) / len(color_variance)
+                
+                # Juda kam rang farqi = qora-oq/kulrang
+                if avg_variance < 30:
+                    is_black_white = True
                     is_old_photo = True
+                elif avg_variance < 50:
+                    is_faded = True  # Xira rang
+                
+                # Sepia rang aniqlash (jigarrang ohang)
+                if dominant_colors[0]['r'] > 150 and dominant_colors[0]['g'] > 100 and dominant_colors[0]['b'] < 100:
+                    if dominant_colors[0]['r'] > dominant_colors[0]['g'] > dominant_colors[0]['b']:
+                        is_sepia = True
+                        is_old_photo = True
+                
+                # Yorug'lik darajasi
+                avg_brightness = sum([c['r'] + c['g'] + c['b'] for c in dominant_colors[:3]]) / (len(dominant_colors[:3]) * 3)
+                if avg_brightness < 80:
+                    brightness_level = 'dark'
+                elif avg_brightness > 200:
+                    brightness_level = 'bright'
             
             analysis = {
                 'face_count': len(faces),
                 'faces': [],
-                'labels': [label.description.lower() for label in labels[:15]],
+                'labels': [label.description.lower() for label in labels[:20]],
                 'is_old_photo': is_old_photo,
                 'is_low_quality': is_low_quality,
-                'dominant_colors': dominant_colors
+                'is_black_white': is_black_white,
+                'is_sepia': is_sepia,
+                'is_faded': is_faded,
+                'brightness_level': brightness_level,
+                'dominant_colors': dominant_colors,
+                'image_size': (img_width, img_height),
+                'has_text': len(texts) > 0,
+                'resolution_quality': 'high' if total_pixels > 1000000 else 'medium' if total_pixels > 500000 else 'low'
             }
             
             # Har bir yuzni tahlil qilish
@@ -220,19 +270,24 @@ class ImageAnalyzer:
                     'sorrow': face.sorrow_likelihood.name,
                     'anger': face.anger_likelihood.name,
                     'surprise': face.surprise_likelihood.name,
-                    'headwear': face.headwear_likelihood.name
+                    'headwear': face.headwear_likelihood.name,
+                    'blurred': face.blurred_likelihood.name,
+                    'under_exposed': face.under_exposed_likelihood.name
                 }
                 analysis['faces'].append(face_info)
             
-            logger.info(f"📊 Chuqur tahlil: {analysis['face_count']} yuz, eski: {is_old_photo}, label: {analysis['labels'][:3]}")
+            logger.info(f"📊 CHUQUR TAHLIL: {analysis['face_count']} yuz | Eski: {is_old_photo} | Qora-oq: {is_black_white} | Sepia: {is_sepia}")
+            logger.info(f"📊 Sifat: {analysis['resolution_quality']} | Yorug'lik: {brightness_level} | O'lcham: {img_width}x{img_height}")
+            logger.info(f"📊 Labellar: {analysis['labels'][:5]}")
+            
             return analysis
             
         except Exception as e:
             logger.error(f"Image analysis error: {e}")
             return None
     
-    def enhance_old_photo(self, image_bytes):
-        """Eski/xira rasmni zamonaviy, rangli, sifatli qilish"""
+    def enhance_old_photo(self, image_bytes, analysis):
+        """Eski/xira rasmni zamonaviy, rangli, sifatli qilish - HOLAT ASOSIDA"""
         try:
             from PIL import Image, ImageEnhance, ImageFilter
             import io
@@ -244,31 +299,86 @@ class ImageAnalyzer:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # 1. Keskinlikni oshirish (Sharpness)
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(2.0)  # 2x keskinroq
+            # HOLATGA QARAB YAXSHILASH
             
-            # 2. Kontrastni oshirish
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.5)  # 1.5x kontrast
+            # 1. QORA-OQ RASM
+            if analysis.get('is_black_white'):
+                logger.info("🎨 Qora-oq rasm - ranglantirish rejimi")
+                # Rangni sekinroq oshirish (eski rasm uchun tabiiy)
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.3)  # 1.3x rangli (past qiymat eski rasm uchun)
+                
+                # Kontrastni yuqori qilish
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.8)  # 1.8x kontrast
             
-            # 3. Rangni oshirish (Saturation)
-            enhancer = ImageEnhance.Color(img)
-            img = enhancer.enhance(1.8)  # 1.8x rangli
+            # 2. SEPIA RASM (jigarrang)
+            elif analysis.get('is_sepia'):
+                logger.info("🎨 Sepia rasm - zamonaviylash rejimi")
+                # Rangni ko'proq oshirish
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(2.0)  # 2x rangli
+                
+                # Kontrast
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.6)
             
-            # 4. Yorug'likni muvozanatlash
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.2)  # 1.2x yorug'roq
+            # 3. XIRA RASM
+            elif analysis.get('is_faded'):
+                logger.info("🎨 Xira rasm - yangilash rejimi")
+                # Rang to'yinganligi
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.8)
+                
+                # Kontrast
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.5)
             
-            # 5. Shovqinni kamaytirish
-            img = img.filter(ImageFilter.SMOOTH)
+            # 4. PAST SIFATLI RASM
+            if analysis.get('is_low_quality'):
+                logger.info("🎨 Past sifat - keskinlik rejimi")
+                # Keskinlik ko'proq
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(2.5)  # 2.5x keskin
+                
+                # Shovqinni kamaytirish
+                img = img.filter(ImageFilter.SMOOTH_MORE)
+            else:
+                # Oddiy keskinlik
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(2.0)
+                
+                img = img.filter(ImageFilter.SMOOTH)
+            
+            # 5. YORUG'LIK MUVOZANATI
+            brightness_level = analysis.get('brightness_level', 'normal')
+            if brightness_level == 'dark':
+                logger.info("🎨 Qorong'i rasm - yorug'lashtirish")
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.4)  # 1.4x yorug'roq
+            elif brightness_level == 'bright':
+                logger.info("🎨 Juda yorug' rasm - pasaytirish")
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(0.9)  # 0.9x qorong'iroq
+            else:
+                # Normal yorug'lik
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.1)
+            
+            # 6. RAZMERNI YAXSHILASH (agar juda kichik bo'lsa)
+            if analysis.get('resolution_quality') == 'low':
+                logger.info("🎨 Kichik rasm - kattalashtirish")
+                width, height = img.size
+                # 2x kattalashtirish
+                new_size = (width * 2, height * 2)
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
             
             # Yangi rasmni bytes ga aylantirish
             output = io.BytesIO()
             img.save(output, format='JPEG', quality=95)
             enhanced_bytes = output.getvalue()
             
-            logger.info("✨ Rasm yaxshilandi: rangli, sifatli, zamonaviy holatga keltirildi")
+            logger.info("✨ Rasm yaxshilandi: HOLAT ASOSIDA rangli, sifatli, zamonaviy!")
             return enhanced_bytes
             
         except Exception as e:
@@ -276,13 +386,48 @@ class ImageAnalyzer:
             return image_bytes  # Xatolik bo'lsa asl rasmni qaytarish
     
     def generate_uzbek_prompt(self, analysis):
-        """Rasmga mos DINAMIK o'zbek tilidagi prompt va so'zlarni yaratish"""
+        """Rasmga mos DINAMIK o'zbek tilidagi prompt va so'zlarni yaratish - HOLAT ASOSIDA"""
         if not analysis:
-            return self.get_default_prompt()
+            return self.get_default_prompt(analysis)
         
         face_count = analysis['face_count']
         faces = analysis['faces']
         labels = analysis['labels']
+        
+        # RASM HOLATI TAHLILI
+        is_old_photo = analysis.get('is_old_photo', False)
+        is_black_white = analysis.get('is_black_white', False)
+        is_sepia = analysis.get('is_sepia', False)
+        is_faded = analysis.get('is_faded', False)
+        is_low_quality = analysis.get('is_low_quality', False)
+        resolution_quality = analysis.get('resolution_quality', 'medium')
+        brightness_level = analysis.get('brightness_level', 'normal')
+        
+        # PROMPT QOSHIMCHALARI - HOLATGA QARAB
+        quality_prefix = ""
+        restoration_notes = ""
+        
+        if is_black_white or is_sepia:
+            quality_prefix = "RESTORED vintage photograph brought to modern life, "
+            restoration_notes = " Enhanced from vintage black-and-white/sepia photo to vibrant modern quality. Show natural aging character while maintaining photorealistic modern restoration. Preserve authentic vintage feel with improved clarity."
+        elif is_faded:
+            quality_prefix = "RESTORED faded photograph revitalized, "
+            restoration_notes = " Enhanced from faded vintage image to clear modern quality. Restore color vibrancy while maintaining authentic character."
+        elif is_low_quality or resolution_quality == 'low':
+            quality_prefix = "ENHANCED low-resolution image upscaled to HD, "
+            restoration_notes = " Upscaled and enhanced to high definition quality with improved clarity and detail."
+        else:
+            quality_prefix = "PREMIUM quality photograph, "
+            restoration_notes = " High definition photorealistic rendering with professional cinematography."
+        
+        # Yorug'lik qo'shimchasi
+        lighting_note = ""
+        if brightness_level == 'dark':
+            lighting_note = " Apply balanced professional lighting to illuminate features naturally without losing shadow depth."
+        elif brightness_level == 'bright':
+            lighting_note = " Balance overly bright areas with professional lighting, maintaining natural highlight-shadow ratio."
+        else:
+            lighting_note = " Maintain natural balanced lighting with professional cinema-quality setup."
         
         # KENGAYTIRILGAN TAHLIL
         # Yosh toifalari
@@ -320,7 +465,7 @@ class ImageAnalyzer:
         
         # DINAMIK PROMPT YARATISH (ko'proq vaziyatlar)
         if face_count == 0:
-            return self.get_default_prompt()
+            return self.get_default_prompt(analysis)
         
         # ===== MAXSUS VAZIYATLAR (KENGAYTIRILGAN) =====
         
@@ -840,7 +985,7 @@ class ImageAnalyzer:
                 }
             
             else:
-                return self.get_default_prompt()
+                return self.get_default_prompt(analysis)
         
         # KO'P ODAMLAR
         else:
@@ -937,8 +1082,38 @@ class ImageAnalyzer:
                     'uzbek_text': phrase
                 }
     
-    def get_default_prompt(self):
-        """Agar tahlil amalga oshmasa, standart prompt - HAR XIL MAVZULAR"""
+    def get_default_prompt(self, analysis=None):
+        """Agar tahlil amalga oshmasa, standart prompt - HAR XIL MAVZULAR - HOLAT ASOSIDA"""
+        
+        # RASM HOLATI TAHLILI (agar mavjud bo'lsa)
+        quality_prefix = "PREMIUM quality photograph, "
+        restoration_notes = " High definition photorealistic rendering with professional cinematography."
+        lighting_note = " Natural balanced lighting with professional cinema-quality setup."
+        
+        if analysis:
+            is_old_photo = analysis.get('is_old_photo', False)
+            is_black_white = analysis.get('is_black_white', False)
+            is_sepia = analysis.get('is_sepia', False)
+            is_faded = analysis.get('is_faded', False)
+            is_low_quality = analysis.get('is_low_quality', False)
+            resolution_quality = analysis.get('resolution_quality', 'medium')
+            brightness_level = analysis.get('brightness_level', 'normal')
+            
+            if is_black_white or is_sepia:
+                quality_prefix = "RESTORED vintage photograph brought to modern life, "
+                restoration_notes = " Enhanced from vintage black-and-white/sepia photo to vibrant modern quality. Preserve authentic vintage feel with improved clarity."
+            elif is_faded:
+                quality_prefix = "RESTORED faded photograph revitalized, "
+                restoration_notes = " Enhanced from faded vintage image to clear modern quality."
+            elif is_low_quality or resolution_quality == 'low':
+                quality_prefix = "ENHANCED low-resolution image upscaled to HD, "
+                restoration_notes = " Upscaled and enhanced to high definition quality."
+            
+            if brightness_level == 'dark':
+                lighting_note = " Balanced professional lighting to illuminate features naturally."
+            elif brightness_level == 'bright':
+                lighting_note = " Balance overly bright areas with professional lighting."
+        
         # HAR XIL MAVZUDAGI MATNLAR
         uzbek_phrases = [
             'Assalomu alaykum! Bugun ajoyib kun! Hayotdan bahramand bo\'ling!',
@@ -952,9 +1127,9 @@ class ImageAnalyzer:
         ]
         
         prompt_styles = [
-            "PHOTOREALISTIC person coming to life IN UZBEK LANGUAGE. Authentic human face with natural features, realistic skin texture showing pores and subtle imperfections. Genuine warm expression: gentle smile forming naturally, kind eyes with natural eye movement and blinks. Natural subtle movements: slow breath visible in chest/shoulders, gentle head tilt, natural eye gaze shift. Professional portrait lighting with soft shadows, natural color grading. CRITICAL: Perfect Uzbek lip-sync. Generate clear authentic Uzbek voice, friendly warm tone, natural speaking pace. Let them speak: '{{phrase}}'. High-quality audio with room presence. Photorealistic details: natural hair texture, realistic skin tones, micro facial expressions. Cinematic portrait quality, professional depth of field, 4K resolution, natural colors.",
+            f"{quality_prefix}PHOTOREALISTIC person coming to life IN UZBEK LANGUAGE. Authentic human face with natural features, realistic skin texture showing pores and subtle imperfections. Genuine warm expression: gentle smile forming naturally, kind eyes with natural eye movement and blinks. Natural subtle movements: slow breath visible in chest/shoulders, gentle head tilt, natural eye gaze shift. Professional portrait lighting with soft shadows, natural color grading.{lighting_note} CRITICAL: Perfect Uzbek lip-sync. Generate clear authentic Uzbek voice, friendly warm tone, natural speaking pace. Let them speak: '{{{{phrase}}}}'. High-quality audio with room presence.{restoration_notes} Photorealistic details: natural hair texture, realistic skin tones, micro facial expressions. Cinematic portrait quality, professional depth of field, 4K resolution, natural colors.",
             
-            "HYPER-REALISTIC person becoming animated IN UZBEK LANGUAGE. Real human face with every authentic detail, natural imperfections making it believable, genuine expressions. Natural life-like movements: breathing visible, gentle blinking, subtle head movements, engaging eye contact. Beautiful natural lighting creating depth. CRITICAL: Flawless Uzbek audio synchronization. Authentic voice with natural tone, clear pronunciation, engaging delivery. They speak: '{{phrase}}'. Professional audio quality. Ultra-realistic human features, genuine expressions. Cinema-grade portrait, 4K."
+            f"{quality_prefix}HYPER-REALISTIC person becoming animated IN UZBEK LANGUAGE. Real human face with every authentic detail, natural imperfections making it believable, genuine expressions. Natural life-like movements: breathing visible, gentle blinking, subtle head movements, engaging eye contact. Beautiful natural lighting creating depth.{lighting_note} CRITICAL: Flawless Uzbek audio synchronization. Authentic voice with natural tone, clear pronunciation, engaging delivery. They speak: '{{{{phrase}}}}'. Professional audio quality.{restoration_notes} Ultra-realistic human features, genuine expressions. Cinema-grade portrait, 4K."
         ]
         
         phrase = random.choice(uzbek_phrases)
@@ -1688,9 +1863,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
             
-            # Rasmni yaxshilash
-            image_bytes = analyzer.enhance_old_photo(image_bytes)
-            logger.info(f"✨ Old photo enhanced for user {user.id}")
+            # Rasmni yaxshilash - HOLAT ASOSIDA
+            image_bytes = analyzer.enhance_old_photo(image_bytes, analysis)
+            logger.info(f"✨ Old photo enhanced for user {user.id} - HOLAT ASOSIDA")
         
         # TEMPLATE VA KATEGORIYA TANLASH
         selected_template = context.user_data.get('selected_template', 'auto')
