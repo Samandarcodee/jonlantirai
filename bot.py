@@ -1780,11 +1780,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 "✅ **Rasm qabul qilindi!**\n\n"
-                "📝 Endi o'zgartirish matnini yozing:\n\n"
-                "🎨 Misol:\n"
-                "• _\"Osmonga qushlar qo'sh\"_\n"
-                "• _\"Fonni tog'larga o'zgartir\"_\n"
-                "• _\"Odam kulayotgan qil\"_\n\n"
+                "📝 Endi **aniq** o'zgartirish matnini yozing:\n\n"
+                "🎨 **TO'G'RI** misollar:\n"
+                "• _\"Add birds flying in the sky\"_\n"
+                "• _\"Change background to mountains\"_\n"
+                "• _\"Make the person smile\"_\n"
+                "• _\"Add flowers in the foreground\"_\n"
+                "• _\"Change to sunset lighting\"_\n\n"
+                "💡 **Maslahat:**\n"
+                "• Inglizchada yozing (yaxshiroq natija)\n"
+                "• Aniq va batafsil\n"
+                "• Bir narsani o'zgartiring\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
@@ -3578,15 +3584,46 @@ class GoogleImagenGenerator:
             return None
     
     def generate_image(self, prompt):
-        """Generate image from text"""
+        """Generate high-quality image from text with enhanced parameters"""
         try:
             token = self.get_access_token()
             if not token:
+                logger.error("Failed to get access token")
                 return None
             
-            models = ['imagen-3.0-generate-001', 'imagegeneration@006']
+            # Enhance prompt for better quality
+            enhanced_prompt = self._enhance_generation_prompt(prompt)
+            logger.info(f"📝 Enhanced generation prompt: {enhanced_prompt[:100]}...")
             
-            for model_id in models:
+            # Try multiple models with optimized parameters
+            models_configs = [
+                {
+                    'model': 'imagen-3.0-generate-001',
+                    'params': {
+                        'sampleCount': 1,
+                        'aspectRatio': '1:1',
+                        'negativePrompt': 'low quality, blurry, distorted, ugly, bad anatomy, watermark, text',
+                        'guidanceScale': 15,
+                        'seed': 0
+                    }
+                },
+                {
+                    'model': 'imagegeneration@006',
+                    'params': {
+                        'sampleCount': 1,
+                        'aspectRatio': '1:1'
+                    }
+                },
+                {
+                    'model': 'imagegeneration@005',
+                    'params': {
+                        'sampleCount': 1
+                    }
+                }
+            ]
+            
+            for config in models_configs:
+                model_id = config['model']
                 try:
                     endpoint = (
                         f"https://{self.location}-aiplatform.googleapis.com/v1/"
@@ -3595,8 +3632,8 @@ class GoogleImagenGenerator:
                     )
                     
                     payload = {
-                        "instances": [{"prompt": prompt}],
-                        "parameters": {"sampleCount": 1}
+                        "instances": [{"prompt": enhanced_prompt}],
+                        "parameters": config['params']
                     }
                     
                     headers = {
@@ -3604,37 +3641,121 @@ class GoogleImagenGenerator:
                         "Content-Type": "application/json"
                     }
                     
-                    logger.info(f"🎨 Trying: {model_id}")
+                    logger.info(f"🎨 Trying model: {model_id}")
                     
                     session = requests.Session()
                     session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
+                    
+                    logger.info(f"Response status: {response.status_code}")
                     
                     if response.status_code == 200:
-                        logger.info(f"✅ Success: {model_id}")
+                        logger.info(f"✅ Generation success with: {model_id}")
                         return response.json()
-                    elif response.status_code != 404:
-                        logger.warning(f"❌ {model_id}: {response.status_code}")
-                except:
+                    else:
+                        logger.warning(f"❌ {model_id} failed: {response.status_code} - {response.text[:200]}")
+                        
+                except Exception as e:
+                    logger.error(f"Error with {model_id}: {str(e)}")
                     continue
             
+            logger.error("All models failed for image generation")
             return None
+            
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"Generate image error: {e}", exc_info=True)
             return None
     
+    def _enhance_generation_prompt(self, user_prompt):
+        """Enhance user prompt for better image generation results"""
+        prompt = user_prompt.strip()
+        
+        # Add quality instructions
+        enhanced = (
+            f"{prompt}, "
+            f"high quality, detailed, photorealistic, professional photography, "
+            f"8k resolution, sharp focus, perfect lighting, vibrant colors, masterpiece"
+        )
+        
+        return enhanced
+    
     def edit_image(self, image_bytes, prompt):
-        """Edit image"""
+        """Edit image with enhanced quality and better prompting"""
         try:
             token = self.get_access_token()
             if not token:
+                logger.error("Failed to get access token")
                 return None
+            
+            # Resize and enhance image for better results
+            from PIL import Image
+            import io
+            
+            try:
+                img = Image.open(io.BytesIO(image_bytes))
+                
+                # Convert to RGB if needed
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Ensure good quality (min 512x512, max 2048x2048)
+                width, height = img.size
+                max_size = 2048
+                min_size = 512
+                
+                if width < min_size or height < min_size:
+                    # Upscale small images
+                    scale = max(min_size / width, min_size / height)
+                    new_width = int(width * scale)
+                    new_height = int(height * scale)
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    logger.info(f"📐 Upscaled: {width}x{height} → {new_width}x{new_height}")
+                elif width > max_size or height > max_size:
+                    # Downscale large images
+                    scale = min(max_size / width, max_size / height)
+                    new_width = int(width * scale)
+                    new_height = int(height * scale)
+                    img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    logger.info(f"📐 Downscaled: {width}x{height} → {new_width}x{new_height}")
+                
+                # Save with high quality
+                output = io.BytesIO()
+                img.save(output, format='JPEG', quality=95)
+                image_bytes = output.getvalue()
+                logger.info(f"✅ Image optimized: {len(image_bytes)} bytes")
+                
+            except Exception as e:
+                logger.warning(f"Image preprocessing failed: {e}, using original")
             
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             
-            models = ['imagen-3.0-capability-001', 'imagegeneration@006']
+            # Enhanced prompt with better instructions
+            enhanced_prompt = self._enhance_edit_prompt(prompt)
+            logger.info(f"📝 Enhanced prompt: {enhanced_prompt[:100]}...")
             
-            for model_id in models:
+            # Try multiple models with different configurations
+            models_configs = [
+                {
+                    'model': 'imagen-3.0-generate-001',
+                    'mode': 'edit',
+                    'params': {
+                        'sampleCount': 1,
+                        'aspectRatio': '1:1',
+                        'negativePrompt': 'low quality, blurry, distorted, ugly, bad anatomy',
+                        'guidanceScale': 15
+                    }
+                },
+                {
+                    'model': 'imagegeneration@006',
+                    'mode': 'edit',
+                    'params': {
+                        'sampleCount': 1
+                    }
+                }
+            ]
+            
+            for config in models_configs:
+                model_id = config['model']
                 try:
                     endpoint = (
                         f"https://{self.location}-aiplatform.googleapis.com/v1/"
@@ -3642,35 +3763,67 @@ class GoogleImagenGenerator:
                         f"publishers/google/models/{model_id}:predict"
                     )
                     
-                    payload = {
-                        "instances": [{
-                            "prompt": prompt,
-                            "image": {"bytesBase64Encoded": image_base64}
-                        }],
-                        "parameters": {"sampleCount": 1}
-                    }
+                    # Build payload based on model
+                    if 'imagen-3.0' in model_id:
+                        payload = {
+                            "instances": [{
+                                "prompt": enhanced_prompt,
+                                "image": {"bytesBase64Encoded": image_base64}
+                            }],
+                            "parameters": config['params']
+                        }
+                    else:
+                        payload = {
+                            "instances": [{
+                                "prompt": enhanced_prompt,
+                                "image": {"bytesBase64Encoded": image_base64}
+                            }],
+                            "parameters": config['params']
+                        }
                     
                     headers = {
                         "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json"
                     }
                     
-                    logger.info(f"🎨 Editing with: {model_id}")
+                    logger.info(f"🎨 Trying model: {model_id}")
                     
                     session = requests.Session()
                     session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
+                    
+                    logger.info(f"Response status: {response.status_code}")
                     
                     if response.status_code == 200:
-                        logger.info(f"✅ Edit success: {model_id}")
+                        logger.info(f"✅ Edit success with: {model_id}")
                         return response.json()
-                except:
+                    else:
+                        logger.warning(f"❌ {model_id} failed: {response.status_code} - {response.text[:200]}")
+                        
+                except Exception as e:
+                    logger.error(f"Error with {model_id}: {str(e)}")
                     continue
             
+            logger.error("All models failed for image editing")
             return None
+            
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"Edit image error: {e}", exc_info=True)
             return None
+    
+    def _enhance_edit_prompt(self, user_prompt):
+        """Enhance user prompt for better image editing results"""
+        # Clean and enhance the prompt
+        prompt = user_prompt.strip()
+        
+        # Add quality and style instructions
+        enhanced = (
+            f"{prompt}. "
+            f"High quality, detailed, photorealistic, professional photography, "
+            f"sharp focus, good lighting, natural colors, maintain original style and quality"
+        )
+        
+        return enhanced
 
 
 # Initialize Imagen generator
