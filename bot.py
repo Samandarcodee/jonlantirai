@@ -241,6 +241,14 @@ class ImageAnalyzer:
             'child': ['child', 'baby', 'kid', 'toddler', 'teenager', 'youth', 'boy', 'girl'],
             'adult': ['adult', 'man', 'woman', 'middle-aged', 'professional']
         }
+        self.visual_feature_keywords = {
+            'beard': ['beard', 'mustache', 'goatee'],
+            'glasses': ['glasses', 'eyeglasses', 'sunglasses', 'spectacles'],
+            'headwear': ['hat', 'cap', 'headwear', 'headscarf', 'turban', 'helmet'],
+            'traditional': ['traditional', 'national costume', 'dress', 'robe', 'kimono', 'sari', 'uzbek', 'chapan'],
+            'formal': ['suit', 'tie', 'tuxedo', 'formal', 'business'],
+            'casual': ['t-shirt', 'hoodie', 'casual', 'jeans']
+        }
 
     def _score_keywords(self, text, keyword_weights):
         score = 0.0
@@ -303,6 +311,128 @@ class ImageAnalyzer:
         dominant_emotion, score = max(emotion_map, key=lambda item: item[1])
         confidence = min(score / 5.0, 1.0)  # Likelihood values go 0-5
         return {'emotion': dominant_emotion if score > 1 else None, 'confidence': confidence}
+
+    def _color_to_name(self, color):
+        r = color.get('r', 0)
+        g = color.get('g', 0)
+        b = color.get('b', 0)
+        avg = (r + g + b) / 3
+        max_channel = max(r, g, b)
+        min_channel = min(r, g, b)
+        if avg > 235:
+            return "very bright/white tones"
+        if avg < 35:
+            return "deep dark tones"
+        if max_channel - min_channel < 15:
+            if avg > 160:
+                return "light gray tones"
+            if avg < 80:
+                return "dark gray tones"
+            return "neutral gray tones"
+        if max_channel == r:
+            return "warm reddish tones"
+        if max_channel == g:
+            return "greenish tones"
+        if max_channel == b:
+            return "cool bluish tones"
+        return "natural color mix"
+
+    def _extract_visual_features(self, analysis):
+        labels = analysis.get('labels', []) if analysis else []
+        label_text = " ".join(labels)
+        features = set()
+        for feature_name, keywords in self.visual_feature_keywords.items():
+            if any(keyword in label_text for keyword in keywords):
+                features.add(feature_name)
+        headwear_present = any(
+            face.get('headwear') in ['VERY_LIKELY', 'LIKELY']
+            for face in (analysis.get('faces', []) if analysis else [])
+        )
+        if headwear_present:
+            features.add('headwear')
+        return features
+
+    def _build_identity_lock_text(self, analysis):
+        if not analysis:
+            return (
+                "IDENTITY LOCK: Use the exact same face from the uploaded reference photo. "
+                "Preserve identical facial structure, skin tone, accessories, and clothing. "
+                "Never swap the person or invent a different face. Animate the photo directly."
+            )
+        
+        gender = analysis.get('dominant_gender')
+        age_group = analysis.get('age_group')
+        
+        gender_text = ""
+        if gender == 'male':
+            gender_text = "Uzbek male"
+        elif gender == 'female':
+            gender_text = "Uzbek female"
+        else:
+            gender_text = "Uzbek person"
+        
+        age_text = ""
+        if age_group == 'elderly':
+            age_text = "elderly"
+        elif age_group == 'child':
+            age_text = "young"
+        elif age_group == 'adult':
+            age_text = "adult"
+        
+        age_gender_desc = f"{age_text} {gender_text}".strip()
+        if not age_gender_desc:
+            age_gender_desc = "Uzbek person"
+        
+        features = self._extract_visual_features(analysis)
+        feature_phrases = []
+        if 'beard' in features:
+            feature_phrases.append("facial hair/beard")
+        if 'glasses' in features:
+            feature_phrases.append("glasses")
+        if 'headwear' in features:
+            feature_phrases.append("headwear/ro'mol")
+        if 'traditional' in features:
+            feature_phrases.append("traditional clothing")
+        if 'formal' in features:
+            feature_phrases.append("formal outfit")
+        if 'casual' in features:
+            feature_phrases.append("casual outfit")
+        
+        dominant_colors = analysis.get('dominant_colors', [])
+        if dominant_colors:
+            color_names = []
+            for color in dominant_colors:
+                color_name = self._color_to_name(color)
+                if color_name not in color_names:
+                    color_names.append(color_name)
+            if color_names:
+                feature_phrases.append(f"color palette ({', '.join(color_names[:2])})")
+        
+        features_text = ""
+        if feature_phrases:
+            features_text = " Preserve " + ", ".join(feature_phrases) + "."
+        
+        lock_text = (
+            f"IDENTITY LOCK: Animate the exact same {age_gender_desc} face from the reference photo. "
+            "Use the provided image pixels as the base so the person never changes. "
+            "Maintain identical facial structure, skin tone, hair, and accessories." + features_text +
+            " Do NOT swap or hallucinate a different person. All frames must clearly look like the original face."
+        )
+        return lock_text
+
+    def apply_identity_lock(self, style, analysis):
+        if not style:
+            return style
+        lock_text = self._build_identity_lock_text(analysis)
+        if not lock_text:
+            return style
+        updated_style = dict(style)
+        existing_prompt = updated_style.get('prompt', "")
+        if existing_prompt:
+            updated_style['prompt'] = f"{lock_text}\n{existing_prompt}"
+        else:
+            updated_style['prompt'] = lock_text
+        return updated_style
         
     def analyze_image(self, image_bytes):
         """Rasmni CHUQUR tahlil qilish - odamlar, sifat, rang"""
@@ -1941,6 +2071,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
             selected_style = analyzer.generate_uzbek_prompt(analysis)
+        
+        if selected_style:
+            selected_style = analyzer.apply_identity_lock(selected_style, analysis)
         
         # DEBUG LOG
         logger.info(f"🎭 Selected scenario: {selected_style['name']}")
