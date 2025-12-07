@@ -3631,7 +3631,7 @@ class GoogleGeminiImageGenerator:
             )
             
             # Use Gemini for vision + generation
-            response = self.generation_model.generate_content(
+            response = self.vision_model.generate_content(
                 [edit_instruction, img],
                 generation_config=genai.GenerationConfig(
                     temperature=0.4,
