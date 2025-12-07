@@ -2300,6 +2300,141 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panel'ga qaytish - CALLBACK VERSION"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    # Reload database
+    user_db.data = user_db.load_db()
+    
+    # Statistikani olish
+    stats = user_db.get_all_stats()
+    
+    # Eng faol foydalanuvchilar
+    top_users = sorted(
+        user_db.data.items(),
+        key=lambda x: x[1].get('videos_created', 0) if isinstance(x[1], dict) else 0,
+        reverse=True
+    )[:10]
+    
+    admin_text = (
+        "┏━━━━━━━━━━━━━━━━━┓\n"
+        "┃ 👑 ADMIN 👑 ┃\n"
+        "┗━━━━━━━━━━━━━━━━━┛\n\n"
+        
+        f"👥 Userlar: {stats['total_users']}\n"
+        f"🎬 Videolar: {stats['total_videos']}\n"
+        f"✅ Bugun: {stats['active_today']}\n\n"
+        
+        "🏆 TOP 10:\n"
+    )
+    
+    for i, (user_id, user_data) in enumerate(top_users, 1):
+        if not isinstance(user_data, dict):
+            continue
+        username = user_data.get('username') or 'username_yoq'
+        first_name = user_data.get('first_name', 'Noma\'lum')
+        videos = user_data.get('videos_created', 0)
+        
+        if username and username != 'username_yoq':
+            admin_text += f"{i}. {first_name} (@{username}) - {videos} video\n"
+        else:
+            admin_text += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
+    
+    admin_text += (
+        "\n━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    
+    # ADMIN MENYU TUGMALARI
+    keyboard = [
+        [
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
+            InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
+        ],
+        [
+            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(admin_text, reply_markup=reply_markup)
+
+
+async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panel - CALLBACK HANDLER"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if user.id not in ADMIN_IDS:
+        await query.edit_message_text("❌ Ruxsat yo'q!")
+        return
+    
+    # Reload database
+    user_db.data = user_db.load_db()
+    
+    # Statistikani olish
+    stats = user_db.get_all_stats()
+    
+    # Eng faol foydalanuvchilar
+    top_users = sorted(
+        user_db.data.items(),
+        key=lambda x: x[1].get('videos_created', 0) if isinstance(x[1], dict) else 0,
+        reverse=True
+    )[:10]
+    
+    admin_text = (
+        "┏━━━━━━━━━━━━━━━━━┓\n"
+        "┃ 👑 ADMIN 👑 ┃\n"
+        "┗━━━━━━━━━━━━━━━━━┛\n\n"
+        
+        f"👥 Userlar: {stats['total_users']}\n"
+        f"🎬 Videolar: {stats['total_videos']}\n"
+        f"✅ Bugun: {stats['active_today']}\n\n"
+        
+        "🏆 TOP 10:\n"
+    )
+    
+    for i, (user_id, user_data) in enumerate(top_users, 1):
+        if not isinstance(user_data, dict):
+            continue
+        username = user_data.get('username') or 'username_yoq'
+        first_name = user_data.get('first_name', 'Noma\'lum')
+        videos = user_data.get('videos_created', 0)
+        
+        if username and username != 'username_yoq':
+            admin_text += f"{i}. {first_name} (@{username}) - {videos} video\n"
+        else:
+            admin_text += f"{i}. {first_name} (ID: {user_id}) - {videos} video\n"
+    
+    admin_text += (
+        "\n━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    
+    # ADMIN MENYU TUGMALARI
+    keyboard = [
+        [
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list"),
+            InlineKeyboardButton("📨 Broadcast", callback_data="admin_broadcast")
+        ],
+        [
+            InlineKeyboardButton("📊 Stats", callback_data="admin_detailed_stats")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(admin_text, reply_markup=reply_markup)
     """Admin panel'ga qaytish"""
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     query = update.callback_query
@@ -3611,6 +3746,7 @@ def main():
         application.add_handler(CallbackQueryHandler(menu_text_to_image, pattern="^menu_text_to_image$"))
         application.add_handler(CallbackQueryHandler(menu_edit_image, pattern="^menu_edit_image$"))
         application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"))
+        application.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^admin_panel$"))
         
         # MENYU CALLBACK HANDLERS
         application.add_handler(CallbackQueryHandler(templates_menu, pattern="^templates_menu$"))
