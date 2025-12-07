@@ -1,2 +1,2 @@
-worker: python bot_google_veo.py
+worker: python bot.py
 
