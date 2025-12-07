@@ -3263,25 +3263,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+            f"📝 Matn: _{text[:80]}_\n\n"
             "🎨 AI rasm yaratyapti...\n\n"
-            "⏳ *30-60 soniya...*",
+            "⏳ *60-90 soniya kutish...*",
             parse_mode='Markdown'
         )
         
         try:
             # Generate image
+            logger.info(f"🎨 User {update.effective_user.id} generating image: {text[:50]}")
             result = imagen_generator.generate_image(text)
+            
+            logger.info(f"📦 Generate result: {result is not None}")
             
             if result and 'predictions' in result:
                 # Get first image
                 predictions = result['predictions']
+                logger.info(f"📊 Predictions count: {len(predictions) if predictions else 0}")
+                
                 if predictions and len(predictions) > 0:
                     image_data = predictions[0]
+                    logger.info(f"📷 Image data keys: {image_data.keys() if image_data else 'None'}")
                     
                     # Image bytes base64 encoded
                     if 'bytesBase64Encoded' in image_data:
                         image_base64 = image_data['bytesBase64Encoded']
                         image_bytes = base64.b64decode(image_base64)
+                        
+                        logger.info(f"✅ Image generated successfully, size: {len(image_bytes)} bytes")
                         
                         # Send image
                         await update.message.reply_photo(
@@ -3299,11 +3308,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await wait_msg.delete()
                         context.user_data.pop('waiting_for', None)
                         return
+                    else:
+                        logger.warning(f"⚠️ No bytesBase64Encoded in image_data: {image_data.keys()}")
+                else:
+                    logger.warning("⚠️ Empty predictions array")
+            else:
+                logger.warning(f"⚠️ Invalid result: {result.keys() if result else 'None'}")
             
             await wait_msg.edit_text(
-                "❌ **Xatolik**\n\n"
-                "Rasm yaratib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
+                "❌ **Rasm yaratib bo'lmadi**\n\n"
+                "🔄 Quyidagilarni sinab ko'ring:\n"
+                "• Boshqa matn yozing\n"
+                "• Inglizcha matn kiriting\n"
+                "• Aniqroq tavsif bering\n\n"
+                "📝 Misol: _\"Beautiful sunset over mountains\"_\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
@@ -3312,7 +3330,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Text to image error: {e}")
             await wait_msg.edit_text(
-                "❌ Xatolik yuz berdi",
+                f"❌ **Xatolik yuz berdi**\n\n"
+                "🔄 Qaytadan urinib ko'ring\n"
+                "yoki boshqa matn kiriting.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         
@@ -3324,32 +3347,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not edit_image_bytes:
             await update.message.reply_text(
-                "❌ Rasm topilmadi. Qaytadan boshlang.",
+                "❌ Rasm topilmadi. Qaytadan boshlang.\n\n"
+                "📸 Avval rasmni yuboring.",
                 parse_mode='Markdown'
             )
+            context.user_data['waiting_for'] = 'photo_for_edit'
             return
         
         wait_msg = await update.message.reply_text(
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+            f"📝 Buyruq: _{text[:80]}_\n\n"
             "✨ AI rasm tahrir qilyapti...\n\n"
-            "⏳ *30-60 soniya...*",
+            "⏳ *60-90 soniya kutish...*",
             parse_mode='Markdown'
         )
         
         try:
             # Edit image
+            logger.info(f"🎨 User {update.effective_user.id} editing image: {text[:50]}")
             result = imagen_generator.edit_image(edit_image_bytes, text)
+            
+            logger.info(f"📦 Edit result: {result is not None}")
             
             if result and 'predictions' in result:
                 predictions = result['predictions']
+                logger.info(f"📊 Edit predictions count: {len(predictions) if predictions else 0}")
+                
                 if predictions and len(predictions) > 0:
                     image_data = predictions[0]
+                    logger.info(f"📷 Edit image data keys: {image_data.keys() if image_data else 'None'}")
                     
                     if 'bytesBase64Encoded' in image_data:
                         image_base64 = image_data['bytesBase64Encoded']
                         edited_bytes = base64.b64decode(image_base64)
+                        
+                        logger.info(f"✅ Image edited successfully, size: {len(edited_bytes)} bytes")
                         
                         # Send edited image
                         await update.message.reply_photo(
@@ -3368,11 +3402,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context.user_data.pop('waiting_for', None)
                         context.user_data.pop('edit_image_bytes', None)
                         return
+                    else:
+                        logger.warning(f"⚠️ No bytesBase64Encoded in edit result: {image_data.keys()}")
+                else:
+                    logger.warning("⚠️ Empty edit predictions array")
+            else:
+                logger.warning(f"⚠️ Invalid edit result: {result.keys() if result else 'None'}")
             
             await wait_msg.edit_text(
-                "❌ **Xatolik**\n\n"
-                "Rasm o'zgartirib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
+                "❌ **Rasm o'zgartirib bo'lmadi**\n\n"
+                "🔄 Quyidagilarni sinab ko'ring:\n"
+                "• Boshqa buyruq yozing\n"
+                "• Inglizcha matn kiriting\n"
+                "• Aniqroq ko'rsatma bering\n\n"
+                "📝 Misol: _\"Add birds to the sky\"_\n"
+                "📝 Misol: _\"Make background blue\"_\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
@@ -3381,7 +3425,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Image edit error: {e}")
             await wait_msg.edit_text(
-                "❌ Xatolik yuz berdi",
+                f"❌ **Xatolik yuz berdi**\n\n"
+                "🔄 Qaytadan urinib ko'ring\n"
+                "yoki boshqa buyruq kiriting.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         
@@ -3577,15 +3626,55 @@ class GoogleImagenGenerator:
             logger.error(f"Error getting access token: {e}")
             return None
     
+    def enhance_prompt(self, prompt):
+        """Promptni ingliz tiliga o'tkazish va yaxshilash"""
+        # O'zbek so'zlarini inglizchaga tarjima qilish
+        translations = {
+            "tog'": "mountain", "tog'lar": "mountains", "toglar": "mountains",
+            "quyosh": "sun", "chiqishi": "sunrise", "botishi": "sunset",
+            "dengiz": "sea", "ocean": "ocean", "daryo": "river",
+            "uy": "house", "bino": "building", "shahar": "city",
+            "qush": "bird", "qushlar": "birds", "hayvon": "animal",
+            "odam": "person", "odamlar": "people", "kishi": "person",
+            "daraxt": "tree", "daraxtlar": "trees", "gul": "flower",
+            "osmon": "sky", "bulut": "cloud", "bulutlar": "clouds",
+            "yulduz": "star", "yulduzlar": "stars", "oy": "moon",
+            "chiroyli": "beautiful", "katta": "big", "kichik": "small",
+            "rang": "color", "qizil": "red", "ko'k": "blue", "yashil": "green",
+            "oq": "white", "qora": "black", "sariq": "yellow",
+            "fon": "background", "old": "front", "orqa": "back",
+            "jonli": "alive", "harakatli": "moving", "tinch": "peaceful",
+            "futuristik": "futuristic", "zamonaviy": "modern", "qadimiy": "ancient",
+            "bo'yida": "near", "ichida": "inside", "ustida": "on top",
+            "kul": "smile", "kulayotgan": "smiling", "g'azablangan": "angry",
+            "baxtli": "happy", "xursand": "joyful",
+            "qo'sh": "add", "o'zgartir": "change", "o'chir": "remove"
+        }
+        
+        enhanced = prompt.lower()
+        for uz, en in translations.items():
+            enhanced = enhanced.replace(uz, en)
+        
+        # Agar asosan inglizcha bo'lsa original promptni qo'shish
+        result_prompt = f"High quality, detailed, professional: {enhanced}"
+        logger.info(f"🎨 Enhanced prompt: '{prompt}' -> '{result_prompt}'")
+        return result_prompt
+    
     def generate_image(self, prompt):
         """Generate image from text"""
         try:
             token = self.get_access_token()
             if not token:
+                logger.error("❌ Token olib bo'lmadi")
                 return None
             
-            models = ['imagen-3.0-generate-001', 'imagegeneration@006']
+            # Promptni yaxshilash
+            enhanced_prompt = self.enhance_prompt(prompt)
             
+            # Imagen 3 modellari
+            models = ['imagen-3.0-generate-001', 'imagen-3.0-fast-generate-001', 'imagegeneration@006']
+            
+            last_error = None
             for model_id in models:
                 try:
                     endpoint = (
@@ -3595,8 +3684,13 @@ class GoogleImagenGenerator:
                     )
                     
                     payload = {
-                        "instances": [{"prompt": prompt}],
-                        "parameters": {"sampleCount": 1}
+                        "instances": [{"prompt": enhanced_prompt}],
+                        "parameters": {
+                            "sampleCount": 1,
+                            "aspectRatio": "1:1",
+                            "safetyFilterLevel": "block_few",
+                            "personGeneration": "allow_adult"
+                        }
                     }
                     
                     headers = {
@@ -3604,36 +3698,52 @@ class GoogleImagenGenerator:
                         "Content-Type": "application/json"
                     }
                     
-                    logger.info(f"🎨 Trying: {model_id}")
+                    logger.info(f"🎨 Trying model: {model_id}")
+                    logger.info(f"📝 Prompt: {enhanced_prompt[:100]}...")
                     
                     session = requests.Session()
                     session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
+                    
+                    logger.info(f"📊 Response status: {response.status_code}")
                     
                     if response.status_code == 200:
-                        logger.info(f"✅ Success: {model_id}")
-                        return response.json()
-                    elif response.status_code != 404:
-                        logger.warning(f"❌ {model_id}: {response.status_code}")
-                except:
+                        result = response.json()
+                        logger.info(f"✅ Success with {model_id}!")
+                        logger.info(f"📦 Response keys: {result.keys() if result else 'None'}")
+                        return result
+                    else:
+                        error_text = response.text[:500] if response.text else "No error text"
+                        logger.warning(f"❌ {model_id} failed: {response.status_code} - {error_text}")
+                        last_error = f"{response.status_code}: {error_text}"
+                except Exception as e:
+                    logger.error(f"❌ Model {model_id} exception: {e}")
+                    last_error = str(e)
                     continue
             
+            logger.error(f"❌ All models failed. Last error: {last_error}")
             return None
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"❌ Generate image error: {e}")
             return None
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image"""
+        """Edit image with enhanced prompt"""
         try:
             token = self.get_access_token()
             if not token:
+                logger.error("❌ Token olib bo'lmadi")
                 return None
+            
+            # Promptni yaxshilash
+            enhanced_prompt = self.enhance_prompt(prompt)
             
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             
-            models = ['imagen-3.0-capability-001', 'imagegeneration@006']
+            # Imagen 3 editing modellari
+            models = ['imagen-3.0-capability-001', 'imagen-3.0-generate-001', 'imagegeneration@006']
             
+            last_error = None
             for model_id in models:
                 try:
                     endpoint = (
@@ -3642,34 +3752,67 @@ class GoogleImagenGenerator:
                         f"publishers/google/models/{model_id}:predict"
                     )
                     
-                    payload = {
-                        "instances": [{
-                            "prompt": prompt,
-                            "image": {"bytesBase64Encoded": image_base64}
-                        }],
-                        "parameters": {"sampleCount": 1}
-                    }
+                    # Edit uchun payload - turli formatlarni sinab ko'rish
+                    if 'capability' in model_id:
+                        # Imagen 3 capability format
+                        payload = {
+                            "instances": [{
+                                "prompt": enhanced_prompt,
+                                "referenceImages": [{
+                                    "referenceImage": {"bytesBase64Encoded": image_base64},
+                                    "referenceType": "REFERENCE_TYPE_STYLE"
+                                }]
+                            }],
+                            "parameters": {
+                                "sampleCount": 1,
+                                "safetyFilterLevel": "block_few"
+                            }
+                        }
+                    else:
+                        # Standard format
+                        payload = {
+                            "instances": [{
+                                "prompt": enhanced_prompt,
+                                "image": {"bytesBase64Encoded": image_base64}
+                            }],
+                            "parameters": {
+                                "sampleCount": 1,
+                                "safetyFilterLevel": "block_few"
+                            }
+                        }
                     
                     headers = {
                         "Authorization": f"Bearer {token}",
                         "Content-Type": "application/json"
                     }
                     
-                    logger.info(f"🎨 Editing with: {model_id}")
+                    logger.info(f"🎨 Editing with model: {model_id}")
+                    logger.info(f"📝 Edit prompt: {enhanced_prompt[:100]}...")
                     
                     session = requests.Session()
                     session.trust_env = False
-                    response = session.post(endpoint, json=payload, headers=headers, timeout=60)
+                    response = session.post(endpoint, json=payload, headers=headers, timeout=90)
+                    
+                    logger.info(f"📊 Edit response status: {response.status_code}")
                     
                     if response.status_code == 200:
-                        logger.info(f"✅ Edit success: {model_id}")
-                        return response.json()
-                except:
+                        result = response.json()
+                        logger.info(f"✅ Edit success with {model_id}!")
+                        logger.info(f"📦 Edit response keys: {result.keys() if result else 'None'}")
+                        return result
+                    else:
+                        error_text = response.text[:500] if response.text else "No error text"
+                        logger.warning(f"❌ Edit {model_id} failed: {response.status_code} - {error_text}")
+                        last_error = f"{response.status_code}: {error_text}"
+                except Exception as e:
+                    logger.error(f"❌ Edit model {model_id} exception: {e}")
+                    last_error = str(e)
                     continue
             
+            logger.error(f"❌ All edit models failed. Last error: {last_error}")
             return None
         except Exception as e:
-            logger.error(f"Error: {e}")
+            logger.error(f"❌ Edit image error: {e}")
             return None
 
 
