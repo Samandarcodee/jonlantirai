@@ -1725,7 +1725,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ **ASOSIY MENYU**\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        "🎬 **Rasm → Video** — Rasmni videoga\n"
+        "🎬 **Video Yaratish** — 2 usulda video\n"
         "✍️ **Matn → Rasm** — Matndan rasm\n"
         "🎨 **Rasmni O'zgartir** — AI editing\n\n"
         
@@ -1737,7 +1737,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ASOSIY MENYU TUGMALARI
     keyboard = [
         [
-            InlineKeyboardButton("🎬 Rasm → Video", callback_data="menu_image_to_video")
+            InlineKeyboardButton("🎬 Video Yaratish", callback_data="menu_video_creation")
         ],
         [
             InlineKeyboardButton("✍️ Matn → Rasm", callback_data="menu_text_to_image"),
@@ -1768,8 +1768,69 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Foydalanuvchini bazaga qo'shish
     user_db.add_user(user.id, user.username, user.first_name)
     
-    # Check if waiting for photo for editing
+    # Check if waiting for photo for editing or video
     waiting_for = context.user_data.get('waiting_for')
+    
+    # MATN ORQALI VIDEO MODE
+    if waiting_for == 'photo_for_text_video':
+        try:
+            file = await context.bot.get_file(photo.file_id)
+            image_url = file.file_path
+            
+            session = requests.Session()
+            session.trust_env = False
+            response = session.get(image_url, timeout=20)
+            response.raise_for_status()
+            image_bytes = response.content
+            
+            # Save image for video creation
+            context.user_data['video_image_bytes'] = image_bytes
+            context.user_data['waiting_for'] = 'text_for_video'
+            
+            await update.message.reply_text(
+                "✅ **Rasm qabul qilindi!**\n\n"
+                "📝 Endi **video tavsifini** yozing:\n\n"
+                "🎬 **Video qanday bo'lishi kerak?**\n\n"
+                "💡 **Yaxshi misollar:**\n"
+                "• _\"Make the person smile warmly, wave hello, \"_\n"
+                "  _\"then say: 'Salom, qalaysizlar!'\"_\n\n"
+                "• _\"Start surprised with wide eyes, then laugh \"_\n"
+                "  _\"and say something funny in Uzbek\"_\n\n"
+                "• _\"Look emotional, speak softly about missing \"_\n"
+                "  _\"someone, gentle expressions\"_\n\n"
+                "📝 **Nima kiriting:**\n"
+                "• Qanday harakat (smile, wave, nod)\n"
+                "• Qanday kayfiyat (happy, sad, funny)\n"
+                "• Nima deyishi kerak (O'zbek tilida)\n"
+                "• Qanday ifoda (expressions)\n\n"
+                "💬 **Til:** Inglizchada yozing (AI yaxshiroq tushunadi)\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            logger.info(f"✅ Image saved for text-based video - user {user.id}")
+            return
+        except Exception as e:
+            logger.error(f"Image save error for user {user.id}: {e}")
+            await update.message.reply_text(
+                "❌ **Xatolik**\n\n"
+                "Rasmni qayta yuboring.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            return
+    
+    # TASODIFIY VIDEO MODE
+    if waiting_for == 'photo_for_random_video':
+        # Use existing video creation logic with random prompt
+        logger.info(f"🎲 Random video mode - user {user.id}")
+        # We'll process this like normal video but with random prompt
+        # Fall through to the normal video creation below
+        # but mark it as random mode
+        context.user_data['random_video_mode'] = True
     
     if waiting_for == 'photo_for_edit':
         # IMAGE EDITING MODE - Advanced AI with preservation rules
@@ -1921,25 +1982,35 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             image_bytes = analyzer.enhance_old_photo(image_bytes, analysis)
             logger.info(f"✨ Old photo enhanced for user {user.id} - HOLAT ASOSIDA")
         
-        # TEMPLATE VA KATEGORIYA TANLASH
-        selected_template = context.user_data.get('selected_template', 'auto')
-        selected_category = context.user_data.get('selected_category', None)
+        # CHECK FOR RANDOM VIDEO MODE (from new menu)
+        random_video_mode = context.user_data.get('random_video_mode', False)
         
-        if selected_category:
-            # KATEGORIYA MODE - 5ta random prompt tanlash
-            category_prompts = get_random_category_prompts(selected_category, 5)
-            if category_prompts:
-                selected_style = random.choice(category_prompts)
-                logger.info(f"🎭 CATEGORY MODE: User {user.id} - Category: {selected_category}, Prompt: {selected_style['name']}")
-            else:
-                selected_style = analyzer.generate_uzbek_prompt(analysis)
-        elif selected_template == 'comedy':
-            # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
+        if random_video_mode:
+            # TASODIFIY VIDEO MODE - Random prompt tanlash
             selected_style = get_random_prompt()
-            logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
+            logger.info(f"🎲 TASODIFIY VIDEO MODE: User {user.id} - {selected_style['name']}")
+            # Clear random_video_mode flag
+            context.user_data.pop('random_video_mode', None)
         else:
-            # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
-            selected_style = analyzer.generate_uzbek_prompt(analysis)
+            # TEMPLATE VA KATEGORIYA TANLASH (existing logic)
+            selected_template = context.user_data.get('selected_template', 'auto')
+            selected_category = context.user_data.get('selected_category', None)
+            
+            if selected_category:
+                # KATEGORIYA MODE - 5ta random prompt tanlash
+                category_prompts = get_random_category_prompts(selected_category, 5)
+                if category_prompts:
+                    selected_style = random.choice(category_prompts)
+                    logger.info(f"🎭 CATEGORY MODE: User {user.id} - Category: {selected_category}, Prompt: {selected_style['name']}")
+                else:
+                    selected_style = analyzer.generate_uzbek_prompt(analysis)
+            elif selected_template == 'comedy':
+                # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
+                selected_style = get_random_prompt()
+                logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
+            else:
+                # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
+                selected_style = analyzer.generate_uzbek_prompt(analysis)
         
         # DEBUG LOG
         logger.info(f"🎭 Selected scenario: {selected_style['name']}")
@@ -3294,6 +3365,199 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     waiting_for = context.user_data.get('waiting_for')
     
+    # TEXT FOR VIDEO (MATN ORQALI VIDEO)
+    if waiting_for == 'text_for_video':
+        video_image_bytes = context.user_data.get('video_image_bytes')
+        
+        if not video_image_bytes:
+            await update.message.reply_text(
+                "❌ **Rasm topilmadi**\n\n"
+                "Qaytadan boshlang:\n"
+                "1. /start ni bosing\n"
+                "2. 🎬 Video Yaratish → 📝 Matn orqali\n"
+                "3. Rasmni yuboring\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            context.user_data.pop('waiting_for', None)
+            return
+        
+        # Check video creation limit
+        can_create, time_left = user_db.can_create_video(user.id)
+        
+        if not can_create:
+            hours = int(time_left // 3600)
+            minutes = int((time_left % 3600) // 60)
+            
+            await update.message.reply_text(
+                "┏━━━━━━━━━━━━━━━━━━━┓\n"
+                "┃ ⏳ **KUTISH VAQTI** ⏳ ┃\n"
+                "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+                f"⚠️ Siz allaqachon video yaratgansiz!\n\n"
+                f"🕐 **Keyingi video:** {hours} soat {minutes} daqiqadan keyin\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🤖 @Jonlantir_Ai_bot\n"
+                f"━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            context.user_data.pop('waiting_for', None)
+            context.user_data.pop('video_image_bytes', None)
+            return
+        
+        wait_msg = await update.message.reply_text(
+            "┏━━━━━━━━━━━━━━━━━━━┓\n"
+            "┃ 🎬 **VIDEO YARATILMOQDA** ┃\n"
+            "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
+            "🎨 AI video yaratyapti...\n"
+            "📊 Matn tahlil qilinmoqda\n"
+            "🎯 Sizning tavsifingiz qo'llanmoqda\n\n"
+            "⏳ *2-15 daqiqa...*",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Use user's text as custom prompt for video creation
+            custom_prompt = text.strip()
+            logger.info(f"🎬 Creating text-based video for user {user.id}: {custom_prompt[:100]}")
+            
+            # Create video using the existing video creation logic
+            # but with custom prompt instead of random
+            session = requests.Session()
+            session.trust_env = False
+            
+            # Get access token
+            credentials = service_account.Credentials.from_service_account_file(
+                GOOGLE_SERVICE_ACCOUNT_FILE,
+                scopes=['https://www.googleapis.com/auth/cloud-platform']
+            )
+            credentials.refresh(Request())
+            access_token = credentials.token
+            
+            # Upload image to GCS
+            upload_url = f"https://storage.googleapis.com/upload/storage/v1/b/jonlantir-test/o?uploadType=media&name=user_images/{user.id}_{int(time.time())}.jpg"
+            upload_headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'image/jpeg'
+            }
+            
+            upload_response = session.post(upload_url, headers=upload_headers, data=video_image_bytes, timeout=30)
+            upload_response.raise_for_status()
+            
+            gcs_image_uri = f"gs://jonlantir-test/user_images/{user.id}_{int(time.time())}.jpg"
+            logger.info(f"✅ Image uploaded to GCS: {gcs_image_uri}")
+            
+            # Create video with CUSTOM PROMPT
+            veo_url = f"https://{GOOGLE_LOCATION}-aiplatform.googleapis.com/v1/projects/{GOOGLE_PROJECT_ID}/locations/{GOOGLE_LOCATION}/publishers/google/models/veo-001:generateContent"
+            
+            veo_payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "fileData": {
+                                    "mimeType": "image/jpeg",
+                                    "fileUri": gcs_image_uri
+                                }
+                            },
+                            {
+                                "text": custom_prompt  # Use user's custom text
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.4,
+                    "topP": 0.95,
+                    "topK": 40,
+                    "maxOutputTokens": 8192
+                }
+            }
+            
+            veo_headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            logger.info(f"🎬 Sending custom video request to Veo API for user {user.id}")
+            veo_response = session.post(veo_url, json=veo_payload, headers=veo_headers, timeout=120)
+            veo_response.raise_for_status()
+            veo_data = veo_response.json()
+            
+            # Get video URL
+            video_uri = None
+            if 'candidates' in veo_data and len(veo_data['candidates']) > 0:
+                parts = veo_data['candidates'][0].get('content', {}).get('parts', [])
+                for part in parts:
+                    if 'fileData' in part:
+                        video_uri = part['fileData'].get('fileUri')
+                        break
+            
+            if not video_uri:
+                raise Exception("Video URI not found in response")
+            
+            logger.info(f"✅ Video created: {video_uri}")
+            
+            # Download video from GCS
+            gcs_path = video_uri.replace('gs://', '')
+            bucket_name = gcs_path.split('/')[0]
+            blob_path = '/'.join(gcs_path.split('/')[1:])
+            
+            download_url = f"https://storage.googleapis.com/storage/v1/b/{bucket_name}/o/{blob_path.replace('/', '%2F')}?alt=media"
+            download_headers = {'Authorization': f'Bearer {access_token}'}
+            
+            video_response = session.get(download_url, headers=download_headers, timeout=60)
+            video_response.raise_for_status()
+            video_bytes = video_response.content
+            
+            logger.info(f"✅ Video downloaded: {len(video_bytes)} bytes")
+            
+            # Send video to user
+            await update.message.reply_video(
+                video=video_bytes,
+                caption=(
+                    "✅ **Video tayyor!**\n\n"
+                    f"📝 _{custom_prompt[:100]}{'...' if len(custom_prompt) > 100 else ''}_\n\n"
+                    "🎬 Sizning tavsifingiz bo'yicha\n"
+                    "🤖 Google Veo 2\n\n"
+                    "━━━━━━━━━━━━━━━━━━\n"
+                    "🤖 @Jonlantir_Ai_bot\n"
+                    "━━━━━━━━━━━━━━━━━━"
+                ),
+                parse_mode='Markdown'
+            )
+            
+            # Record video creation
+            user_db.record_video_creation(user.id)
+            
+            await wait_msg.delete()
+            context.user_data.pop('waiting_for', None)
+            context.user_data.pop('video_image_bytes', None)
+            logger.info(f"✅ Successfully created text-based video for user {user.id}")
+            return
+            
+        except Exception as e:
+            logger.error(f"Text-based video creation error: {e}", exc_info=True)
+            await wait_msg.edit_text(
+                "❌ **Xatolik yuz berdi**\n\n"
+                "Video yaratib bo'lmadi.\n"
+                "Qaytadan urinib ko'ring.\n\n"
+                "💡 **Maslahat:**\n"
+                "• Inglizchada yozing\n"
+                "• Oddiy va aniq bo'lsin\n"
+                "• Harakat va gaplarni kiriting\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
+            context.user_data.pop('waiting_for', None)
+            context.user_data.pop('video_image_bytes', None)
+        
+        return
+    
     # TEXT TO IMAGE
     if waiting_for == 'text_for_image':
         wait_msg = await update.message.reply_text(
@@ -3480,31 +3744,113 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 📋 ASOSIY MENYU HANDLERS
 # ==========================================
 
-async def menu_image_to_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rasm → Video menu"""
+async def menu_video_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Video Yaratish submenu - 2 variant"""
     query = update.callback_query
     await query.answer()
     
     message = (
         "╔══════════════════════╗\n"
-        "║ 🎬 **RASM → VIDEO** ║\n"
+        "║ 🎬 **VIDEO YARATISH** ║\n"
         "╚══════════════════════╝\n\n"
         
-        "📸 **Rasmni yuboring**\n\n"
+        "📹 **Video yaratish usulini tanlang:**\n\n"
         
-        "Bot rasmni tahlil qilib:\n"
-        "✅ Jonli videoga aylantiradi\n"
-        "✅ O'zbek tilida gapiradi\n"
-        "✅ HD sifatda yaratadi\n\n"
+        "1️⃣ **Matn orqali** — Siz tavsif bering\n"
+        "   • Rasm yuboring\n"
+        "   • Video qanday bo'lishini yozing\n"
+        "   • Sifatli video tayyorlanadi\n\n"
+        
+        "2️⃣ **Tasodifiy** — AI o'zi tanlaydi\n"
+        "   • Rasm yuboring\n"
+        "   • Random komediya stili\n"
+        "   • Kutilmagan video!\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
         "━━━━━━━━━━━━━━━━━━━━━━"
     )
     
-    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")]]
+    keyboard = [
+        [InlineKeyboardButton("📝 Matn orqali Video", callback_data="menu_text_video")],
+        [InlineKeyboardButton("🎲 Tasodifiy Video", callback_data="menu_random_video")],
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")]
+    ]
     await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
-    context.user_data['waiting_for'] = 'photo_for_video'
+
+
+async def menu_text_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Matn orqali video yaratish"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = (
+        "╔══════════════════════╗\n"
+        "║ 📝 **MATN ORQALI VIDEO** ║\n"
+        "╚══════════════════════╝\n\n"
+        
+        "📸 **1-QADAM: Rasmni yuboring**\n\n"
+        
+        "Keyin sizdan so'raladi:\n"
+        "• Video qanday bo'lishini yozing\n"
+        "• Qanday harakat qilishini\n"
+        "• Nima deyishini\n"
+        "• Qanday kayfiyatda\n\n"
+        
+        "✨ **Misol:**\n"
+        "_\"Kulgi bilan salom aytsin, qo'l silkitsin, \"_\n"
+        "_\"keyin jiddiy bo'lib, sog'inch bildirib gapirsin\"_\n\n"
+        
+        "💡 **Maslahat:**\n"
+        "• Inglizchada yozing (yaxshiroq natija)\n"
+        "• Aniq va batafsil\n"
+        "• Harakat va gaplarni kiriting\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="menu_video_creation")]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['waiting_for'] = 'photo_for_text_video'
+
+
+async def menu_random_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tasodifiy video yaratish"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = (
+        "╔══════════════════════╗\n"
+        "║ 🎲 **TASODIFIY VIDEO** ║\n"
+        "╚══════════════════════╝\n\n"
+        
+        "📸 **Rasmni yuboring**\n\n"
+        
+        "Bot avtomatik:\n"
+        "✅ Tasodifiy komediya stilini tanlaydi\n"
+        "✅ O'zbek tilida gapiradi\n"
+        "✅ Kulgili va jonli video yaratadi\n"
+        "✅ HD sifatda qaytaradi\n\n"
+        
+        "🎭 **Variantlar:**\n"
+        "• Hayron qolganlik\n"
+        "• Kulgili prikol\n"
+        "• Sho'x va o'ychan\n"
+        "• Cool va jiddiy\n"
+        "• ... va boshqalar!\n\n"
+        
+        "🎯 **Har safar yangi stil!**\n\n"
+        
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 @Jonlantir_Ai_bot\n"
+        "━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("◀️ Orqaga", callback_data="menu_video_creation")]]
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['waiting_for'] = 'photo_for_random_video'
 
 
 async def menu_text_to_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3615,7 +3961,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ **ASOSIY MENYU**\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        "🎬 **Rasm → Video** — Rasmni videoga\n"
+        "🎬 **Video Yaratish** — 2 usulda video\n"
         "✍️ **Matn → Rasm** — Matndan rasm\n"
         "🎨 **Rasmni O'zgartir** — AI editing\n\n"
         
@@ -3625,7 +3971,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     keyboard = [
-        [InlineKeyboardButton("🎬 Rasm → Video", callback_data="menu_image_to_video")],
+        [InlineKeyboardButton("🎬 Video Yaratish", callback_data="menu_video_creation")],
         [InlineKeyboardButton("✍️ Matn → Rasm", callback_data="menu_text_to_image"),
          InlineKeyboardButton("🎨 Rasmni O'zgartir", callback_data="menu_edit_image")],
         [InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
@@ -3638,6 +3984,8 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     context.user_data.pop('waiting_for', None)
     context.user_data.pop('edit_image_bytes', None)
+    context.user_data.pop('video_image_bytes', None)
+    context.user_data.pop('random_video_mode', None)
     
     await query.edit_message_text(welcome_message, parse_mode='Markdown', reply_markup=reply_markup)
 
@@ -4004,7 +4352,12 @@ def main():
         application.add_handler(CommandHandler("stats", my_stats))
         
         # ASOSIY MENYU CALLBACKS - YANGI!
-        application.add_handler(CallbackQueryHandler(menu_image_to_video, pattern="^menu_image_to_video$"))
+        # New video creation menu handlers
+        application.add_handler(CallbackQueryHandler(menu_video_creation, pattern="^menu_video_creation$"))
+        application.add_handler(CallbackQueryHandler(menu_text_video, pattern="^menu_text_video$"))
+        application.add_handler(CallbackQueryHandler(menu_random_video, pattern="^menu_random_video$"))
+        
+        # Image generation and editing handlers
         application.add_handler(CallbackQueryHandler(menu_text_to_image, pattern="^menu_text_to_image$"))
         application.add_handler(CallbackQueryHandler(menu_edit_image, pattern="^menu_edit_image$"))
         application.add_handler(CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"))
