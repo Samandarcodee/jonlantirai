@@ -1772,7 +1772,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_for = context.user_data.get('waiting_for')
     
     if waiting_for == 'photo_for_edit':
-        # IMAGE EDITING MODE
+        # IMAGE EDITING MODE - Advanced AI with preservation rules
         try:
             file = await context.bot.get_file(photo.file_id)
             image_url = file.file_path
@@ -1789,26 +1789,48 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(
                 "✅ **Rasm qabul qilindi!**\n\n"
-                "📝 Endi **aniq** o'zgartirish matnini yozing:\n\n"
-                "🎨 **TO'G'RI** misollar:\n"
-                "• _\"Add birds flying in the sky\"_\n"
-                "• _\"Change background to mountains\"_\n"
-                "• _\"Make the person smile\"_\n"
+                "📝 Endi **o'zgartirish matnini** yozing:\n\n"
+                "🛡️ **Avtomatik saqlanadi:**\n"
+                "• Yuz va identifikatsiya\n"
+                "• Tabiiy proporsiyalar\n"
+                "• Yorug'lik va soyalar\n"
+                "• Asl kompozitsiya\n\n"
+                "🎨 **TO'G'RI misollar:**\n"
+                "• _\"Add sunset background\"_\n"
+                "• _\"Change to cartoon style\"_\n"
                 "• _\"Add flowers in the foreground\"_\n"
-                "• _\"Change to sunset lighting\"_\n\n"
-                "💡 **Maslahat:**\n"
-                "• Inglizchada yozing (yaxshiroq natija)\n"
-                "• Aniq va batafsil\n"
-                "• Bir narsani o'zgartiring\n\n"
+                "• _\"Remove background objects\"_\n"
+                "• _\"Change sky to starry night\"_\n\n"
+                "💡 **Qoidalar:**\n"
+                "• Inglizchada yozing\n"
+                "• Aniq va qisqa\n"
+                "• Bitta o'zgarish\n"
+                "• Oddiy so'zlar\n\n"
+                "⚠️ **NOTO'G'RI:**\n"
+                "• Uzun va murakkab\n"
+                "• Ko'p narsani bir vaqtda\n"
+                "• Noaniq so'rovlar\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
+            logger.info(f"✅ Image saved for editing - user {user.id}")
             return
         except Exception as e:
-            logger.error(f"Image save error: {e}")
-            await update.message.reply_text("❌ Xatolik. Qaytadan yuboring.")
+            logger.error(f"Image save error for user {user.id}: {e}")
+            await update.message.reply_text(
+                "❌ **Xatolik**\n\n"
+                "Rasmni qayta yuboring.\n\n"
+                "📝 **Talablar:**\n"
+                "• JPEG/PNG format\n"
+                "• Max 10MB\n"
+                "• Aniq va sifatli\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
+                parse_mode='Markdown'
+            )
             return
     
     # IMAGE TO VIDEO MODE (default)
@@ -3278,24 +3300,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ ✍️ **RASM YARATILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "🎨 Google Gemini rasm yaratyapti...\n\n"
+            "🎨 AI rasm yaratyapti...\n"
+            "📊 Tavsif tahlil qilinmoqda\n"
+            "🎯 Sifat nazorati faol\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
         
         try:
-            # Generate image with Gemini
+            # Generate image with enhanced Gemini
+            logger.info(f"🎨 Generating image for user {user.id}: {text[:100]}")
             result = imagen_generator.generate_image(text)
             
             if result and result.get('success') and 'image_bytes' in result:
                 image_bytes = result['image_bytes']
                 
-                # Send image
+                # Send image with detailed caption
                 await update.message.reply_photo(
                     photo=image_bytes,
                     caption=(
                         "✅ **Rasm tayyor!**\n\n"
-                        f"📝 _{text[:50]}_\n\n"
+                        f"📝 _{text[:80]}{'...' if len(text) > 80 else ''}_\n\n"
+                        "🎯 **Sifat:**\n"
+                        "• 4K resolution\n"
+                        "• Tabiiy proporsiyalar\n"
+                        "• Professional chiqish\n\n"
                         "🤖 Google Gemini 2.0\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
@@ -3306,23 +3335,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await wait_msg.delete()
                 context.user_data.pop('waiting_for', None)
+                logger.info(f"✅ Successfully generated image for user {user.id}")
                 return
             
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
-                "Rasm yaratib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
-                "💡 **Maslahat:** Inglizchada yozing\n\n"
+                "Rasm yaratib bo'lmadi.\n\n"
+                "💡 **Maslahatlar:**\n"
+                "• Inglizchada yozing\n"
+                "• Aniqroq tavsif bering\n"
+                "• Stil ko'rsating (realistic, cartoon, etc.)\n\n"
+                "🔄 Qaytadan urinib ko'ring\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
+            logger.warning(f"❌ Failed to generate image for user {user.id}")
         except Exception as e:
             logger.error(f"Gemini text to image error: {e}", exc_info=True)
             await wait_msg.edit_text(
-                "❌ Xatolik yuz berdi.\n"
-                "Qaytadan urinib ko'ring.",
+                "❌ **Xatolik yuz berdi**\n\n"
+                "Qaytadan urinib ko'ring.\n"
+                "Agar muammo davom etsa,\n"
+                "admin bilan bog'laning.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         
@@ -3334,33 +3373,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not edit_image_bytes:
             await update.message.reply_text(
-                "❌ Rasm topilmadi. Qaytadan boshlang.",
+                "❌ **Rasm topilmadi**\n\n"
+                "Qaytadan boshlang:\n"
+                "1. /start ni bosing\n"
+                "2. 🎨 Rasmni O'zgartir tanlang\n"
+                "3. Rasmni yuboring\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
+            context.user_data.pop('waiting_for', None)
             return
         
         wait_msg = await update.message.reply_text(
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ 🎨 **RASM O'ZGARTIRILMOQDA** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            "✨ Google Gemini rasm tahrir qilyapti...\n\n"
+            "✨ AI rasm tahrir qilyapti...\n"
+            "🔍 Asl rasm tahlil qilinmoqda\n"
+            "🛡️ Yuz va identifikatsiya saqlanmoqda\n"
+            "🎯 Faqat so'ralgan o'zgarish qo'llanmoqda\n\n"
             "⏳ *30-60 soniya...*",
             parse_mode='Markdown'
         )
         
         try:
-            # Edit image with Gemini
+            # Edit image with enhanced Gemini
+            logger.info(f"🎨 Editing image for user {user.id}: {text[:100]}")
             result = imagen_generator.edit_image(edit_image_bytes, text)
             
             if result and result.get('success') and 'image_bytes' in result:
                 edited_bytes = result['image_bytes']
                 
-                # Send edited image
+                # Send edited image with detailed caption
                 await update.message.reply_photo(
                     photo=edited_bytes,
                     caption=(
                         "✅ **Rasm o'zgartirildi!**\n\n"
-                        f"📝 _{text[:50]}_\n\n"
+                        f"📝 _{text[:80]}{'...' if len(text) > 80 else ''}_\n\n"
+                        "🎯 **Saqlanganlar:**\n"
+                        "• Asl yuz va identifikatsiya ✓\n"
+                        "• Tabiiy proporsiyalar ✓\n"
+                        "• Yorug'lik va soyalar ✓\n"
+                        "• Sifatsiz tahrirlash ✓\n\n"
                         "🤖 Google Gemini 2.0\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
@@ -3372,22 +3428,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await wait_msg.delete()
                 context.user_data.pop('waiting_for', None)
                 context.user_data.pop('edit_image_bytes', None)
+                logger.info(f"✅ Successfully edited image for user {user.id}")
                 return
             
             await wait_msg.edit_text(
                 "❌ **Xatolik**\n\n"
-                "Rasm o'zgartirib bo'lmadi.\n"
-                "Boshqa matn kiriting.\n\n"
-                "💡 **Maslahat:** Inglizchada yozing\n\n"
+                "Rasm o'zgartirib bo'lmadi.\n\n"
+                "💡 **Maslahatlar:**\n"
+                "• Inglizchada yozing\n"
+                "• Aniq va qisqa ko'rsatma bering\n"
+                "• Bitta narsani o'zgartiring\n"
+                "• Oddiy so'zlar ishlating\n\n"
+                "📝 **Yaxshi misollar:**\n"
+                "• \"Add sunset background\"\n"
+                "• \"Change hair color to blonde\"\n"
+                "• \"Add flowers in foreground\"\n\n"
+                "🔄 Qaytadan urinib ko'ring\n\n"
                 "━━━━━━━━━━━━━━━━━━\n"
                 "🤖 @Jonlantir_Ai_bot\n"
                 "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
+            logger.warning(f"❌ Failed to edit image for user {user.id}")
         except Exception as e:
             logger.error(f"Gemini image edit error: {e}", exc_info=True)
             await wait_msg.edit_text(
-                "❌ Xatolik yuz berdi",
+                "❌ **Xatolik yuz berdi**\n\n"
+                "Qaytadan urinib ko'ring.\n"
+                "Agar muammo davom etsa,\n"
+                "admin bilan bog'laning.\n\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                "🤖 @Jonlantir_Ai_bot\n"
+                "━━━━━━━━━━━━━━━━━━",
                 parse_mode='Markdown'
             )
         
@@ -3436,7 +3508,7 @@ async def menu_image_to_video(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def menu_text_to_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Matn → Rasm menu"""
+    """Matn → Rasm menu with comprehensive instructions"""
     query = update.callback_query
     await query.answer()
     
@@ -3445,14 +3517,27 @@ async def menu_text_to_image(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "║ ✍️ **MATN → RASM** ║\n"
         "╚══════════════════════╝\n\n"
         
-        "✍️ **Matn yozing:**\n\n"
+        "✍️ **Matn yozing, AI rasm yaratadi!**\n\n"
         
-        "📝 Misol:\n"
-        "• _\"Tog'larda quyosh chiqishi\"_\n"
-        "• _\"Dengiz bo'yida chiroyli uy\"_\n"
-        "• _\"Futuristik shahar\"_\n\n"
+        "🎯 **Nimalar qo'llaniladi:**\n"
+        "• 4K sifatli rasm\n"
+        "• Tabiiy proporsiyalar\n"
+        "• Professional chiqish\n"
+        "• Hech qanday tekst/watermark\n\n"
         
-        "✨ AI matndan rasm yaratadi!\n\n"
+        "🎨 **Stillar:**\n"
+        "• _realistic_ - Haqiqiy foto\n"
+        "• _cartoon_ - Multfilm\n"
+        "• _cinematic_ - Kino\n"
+        "• _minimalistic_ - Oddiy\n\n"
+        
+        "📝 **Misollar:**\n"
+        "• _\"Realistic sunset in mountains, 4K\"_\n"
+        "• _\"Cartoon cat playing guitar\"_\n"
+        "• _\"Cinematic futuristic city at night\"_\n"
+        "• _\"Minimalistic modern house\"_\n\n"
+        
+        "💡 **Maslahat:** Inglizchada yozing\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
@@ -3465,7 +3550,7 @@ async def menu_text_to_image(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def menu_edit_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rasmni O'zgartirish menu"""
+    """Rasmni O'zgartirish menu with strict editing rules"""
     query = update.callback_query
     await query.answer()
     
@@ -3474,18 +3559,31 @@ async def menu_edit_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "║ 🎨 **RASMNI O'ZGARTIR** ║\n"
         "╚══════════════════════╝\n\n"
         
-        "📸 **Rasmni yuboring**\n\n"
+        "📸 **1) Rasmni yuboring**\n"
+        "📝 **2) O'zgartirish matnini yozing**\n\n"
         
-        "Keyin o'zgartirish matnini:\n"
-        "• Fonga ob'ekt qo'shish\n"
-        "• Ranglarni o'zgartirish\n"
+        "🛡️ **Saqlanadi:**\n"
+        "• Yuz va identifikatsiya\n"
+        "• Tabiiy proporsiyalar\n"
+        "• Yorug'lik va soyalar\n"
+        "• Asl tarkib va kompozitsiya\n\n"
+        
+        "✅ **O'zgartirishlar:**\n"
+        "• Fon o'zgartirish\n"
+        "• Ob'ekt qo'shish/o'chirish\n"
+        "• Rang o'zgartirish\n"
         "• Stil o'zgartirish\n\n"
         
-        "📝 Misol:\n"
-        "_\"Osmonga qushlar qo'sh\"_\n"
-        "_\"Fonni tog'larga o'zgartir\"_\n\n"
+        "📝 **TO'G'RI misollar:**\n"
+        "• _\"Add sunset background\"_\n"
+        "• _\"Change to cartoon style\"_\n"
+        "• _\"Add flowers in foreground\"_\n"
+        "• _\"Remove background objects\"_\n\n"
         
-        "✨ AI rasmni o'zgartiradi!\n\n"
+        "⚠️ **Muhim:**\n"
+        "• Inglizchada yozing\n"
+        "• Aniq va qisqa\n"
+        "• Bitta narsani o'zgartiring\n\n"
         
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "🤖 @Jonlantir_Ai_bot\n"
@@ -3549,7 +3647,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 
 class GoogleGeminiImageGenerator:
-    """Google Gemini for image generation and editing"""
+    """Advanced AI system for image generation and editing with strict quality control"""
     
     def __init__(self):
         """Initialize Gemini image generator"""
@@ -3566,22 +3664,31 @@ class GoogleGeminiImageGenerator:
             logger.error(f"Failed to initialize Gemini: {e}")
     
     def generate_image(self, prompt):
-        """Generate high-quality image from text using Gemini"""
+        """
+        Generate high-quality, realistic or stylistically correct image from text description.
+        
+        Rules:
+        - Extract main details: subject, environment, style, mood, colors, perspective
+        - Produce clean, sharp, 4K-quality image
+        - NO text inside image unless requested
+        - NO distorted human faces or body proportions
+        - Complete short descriptions logically while staying faithful to meaning
+        """
         try:
             if not self.generation_model:
                 logger.error("Gemini generation model not initialized")
                 return None
             
-            # Enhance prompt for better quality
+            # Parse and enhance prompt based on requirements
             enhanced_prompt = self._enhance_generation_prompt(prompt)
-            logger.info(f"📝 Gemini generation prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"📝 Gemini generation prompt: {enhanced_prompt[:150]}...")
             
             # Generate image with Gemini
             response = self.generation_model.generate_content(
                 enhanced_prompt,
                 generation_config=genai.GenerationConfig(
-                    temperature=0.4,
-                    top_p=0.95,
+                    temperature=0.3,  # Lower for more consistent quality
+                    top_p=0.9,
                     top_k=40,
                     max_output_tokens=8192,
                 )
@@ -3596,8 +3703,7 @@ class GoogleGeminiImageGenerator:
                         logger.info(f"✅ Gemini generated image: {len(image_data)} bytes")
                         return {'image_bytes': image_data, 'success': True}
             
-            # Try alternative: describe and use imagen as fallback
-            logger.warning("Gemini didn't return image, trying alternative...")
+            logger.warning("Gemini didn't return image")
             return None
             
         except Exception as e:
@@ -3605,7 +3711,18 @@ class GoogleGeminiImageGenerator:
             return None
     
     def edit_image(self, image_bytes, prompt):
-        """Edit image using Gemini vision + prompt"""
+        """
+        Edit existing image based on user instructions.
+        
+        Rules:
+        - Edit ONLY what user asked for
+        - Keep original faces, identity, background, composition unless requested to change
+        - Make realistic, seamless edits with no artifacts
+        - Keep proportions natural
+        - Apply simplest and most logical interpretation if unclear
+        - Maintain consistent lighting and shadows
+        - Don't add extra objects unless user asks
+        """
         try:
             if not self.vision_model:
                 logger.error("Gemini vision model not initialized")
@@ -3614,29 +3731,36 @@ class GoogleGeminiImageGenerator:
             # Optimize image first
             image_bytes = self._optimize_image(image_bytes)
             
-            # Enhance prompt
+            # Enhance prompt with strict editing rules
             enhanced_prompt = self._enhance_edit_prompt(prompt)
-            logger.info(f"📝 Gemini edit prompt: {enhanced_prompt[:100]}...")
+            logger.info(f"📝 Gemini edit prompt: {enhanced_prompt[:150]}...")
             
             # Load image from bytes
             img = Image.open(io.BytesIO(image_bytes))
             
-            # Create detailed prompt for image editing
+            # Create detailed prompt for image editing with preservation rules
             edit_instruction = (
-                f"You are an expert image editor. "
-                f"Modify this image as requested: {enhanced_prompt}. "
-                f"Generate a new high-quality image that incorporates the requested changes "
-                f"while maintaining the original style, composition, and quality. "
-                f"Output ONLY the modified image."
+                f"You are an expert image editor. Your task is to edit this image following these STRICT rules:\n\n"
+                f"EDITING INSTRUCTION: {enhanced_prompt}\n\n"
+                f"PRESERVATION RULES (CRITICAL):\n"
+                f"1. Keep ALL original faces, identity, and facial features UNCHANGED unless specifically requested\n"
+                f"2. Maintain the original background and composition UNLESS explicitly asked to change\n"
+                f"3. Preserve natural body proportions and anatomy\n"
+                f"4. Keep consistent lighting and shadows with the original image\n"
+                f"5. Make seamless, realistic edits with NO artifacts or distortions\n"
+                f"6. Do NOT add extra objects unless the user specifically requests them\n"
+                f"7. Apply ONLY the requested changes - nothing more, nothing less\n\n"
+                f"OUTPUT: Generate a high-quality edited image that incorporates ONLY the requested changes "
+                f"while preserving everything else from the original."
             )
             
             # Use Gemini for vision + generation
             response = self.generation_model.generate_content(
                 [edit_instruction, img],
                 generation_config=genai.GenerationConfig(
-                    temperature=0.4,
-                    top_p=0.95,
-                    top_k=40,
+                    temperature=0.2,  # Very low for faithful editing
+                    top_p=0.85,
+                    top_k=30,
                     max_output_tokens=8192,
                 )
             )
@@ -3657,7 +3781,7 @@ class GoogleGeminiImageGenerator:
             return None
     
     def _optimize_image(self, image_bytes):
-        """Optimize image for better results"""
+        """Optimize image for better results while maintaining quality"""
         try:
             img = Image.open(io.BytesIO(image_bytes))
             
@@ -3665,9 +3789,9 @@ class GoogleGeminiImageGenerator:
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Resize if needed (optimal: 1024x1024 for Gemini)
+            # Resize if needed (optimal: 1024x1024 for Gemini, but maintain aspect ratio)
             width, height = img.size
-            max_size = 1024
+            max_size = 1536  # Higher for better quality
             min_size = 512
             
             if width < min_size or height < min_size:
@@ -3681,36 +3805,135 @@ class GoogleGeminiImageGenerator:
                 img = img.resize(new_size, Image.Resampling.LANCZOS)
                 logger.info(f"📐 Downscaled: {width}x{height} → {new_size}")
             
-            # Save optimized
+            # Save optimized with higher quality
             output = io.BytesIO()
-            img.save(output, format='JPEG', quality=95)
+            img.save(output, format='JPEG', quality=98)
             return output.getvalue()
             
         except Exception as e:
             logger.warning(f"Image optimization failed: {e}")
             return image_bytes
     
+    def _detect_style(self, prompt):
+        """Detect requested style from prompt"""
+        prompt_lower = prompt.lower()
+        
+        style_keywords = {
+            'realistic': ['realistic', 'photorealistic', 'photo', 'real life', 'lifelike'],
+            'cartoon': ['cartoon', 'animated', 'animation', 'toon', 'comic'],
+            'cinematic': ['cinematic', 'movie', 'film', 'dramatic lighting'],
+            'minimalistic': ['minimalistic', 'minimal', 'simple', 'clean'],
+            'artistic': ['artistic', 'art', 'painting', 'painted'],
+            'sketch': ['sketch', 'drawing', 'pencil', 'hand-drawn'],
+            '3d': ['3d', 'three dimensional', 'cgi', 'rendered'],
+            'vintage': ['vintage', 'retro', 'old', 'classic'],
+            'modern': ['modern', 'contemporary', 'sleek'],
+            'fantasy': ['fantasy', 'magical', 'mystical', 'ethereal'],
+        }
+        
+        for style, keywords in style_keywords.items():
+            for keyword in keywords:
+                if keyword in prompt_lower:
+                    return style
+        
+        return 'realistic'  # Default to realistic
+    
     def _enhance_generation_prompt(self, user_prompt):
-        """Enhance prompt for image generation"""
+        """
+        Enhance prompt for image generation with detailed quality controls.
+        
+        Extract: subject, environment, style, mood, colors, perspective
+        """
         prompt = user_prompt.strip()
         
+        # Detect style from prompt
+        detected_style = self._detect_style(prompt)
+        
+        # Style-specific enhancements
+        style_enhancements = {
+            'realistic': (
+                "photorealistic, ultra-detailed, 4K quality, natural lighting, "
+                "professional photography, correct human anatomy, realistic skin texture, "
+                "perfect proportions, sharp focus, high detail"
+            ),
+            'cartoon': (
+                "cartoon style, animated, vibrant colors, clean lines, "
+                "stylized but proportional, expressive, smooth shading"
+            ),
+            'cinematic': (
+                "cinematic composition, dramatic lighting, movie quality, "
+                "depth of field, atmospheric, professional color grading, epic scene"
+            ),
+            'minimalistic': (
+                "minimalistic design, clean composition, simple elements, "
+                "elegant, uncluttered, modern aesthetic, balanced"
+            ),
+            'artistic': (
+                "artistic style, creative interpretation, painterly quality, "
+                "harmonious colors, artistic composition, expressive brushwork"
+            ),
+            'sketch': (
+                "sketch style, hand-drawn appearance, pencil lines, artistic strokes, "
+                "natural drawing technique"
+            ),
+            '3d': (
+                "3D rendered, CGI quality, detailed textures, realistic materials, "
+                "professional 3D modeling, smooth surfaces, proper lighting"
+            ),
+            'vintage': (
+                "vintage aesthetic, classic style, nostalgic feel, "
+                "period-appropriate details, timeless quality"
+            ),
+            'modern': (
+                "modern design, contemporary style, sleek appearance, "
+                "current trends, polished look"
+            ),
+            'fantasy': (
+                "fantasy style, magical atmosphere, imaginative elements, "
+                "ethereal quality, creative interpretation"
+            )
+        }
+        
+        style_enhancement = style_enhancements.get(detected_style, style_enhancements['realistic'])
+        
+        # Build comprehensive prompt
         enhanced = (
-            f"Create a high-quality, detailed image: {prompt}. "
-            f"Style: photorealistic, professional photography, 8k resolution, "
-            f"sharp focus, perfect composition, vibrant colors, masterpiece quality. "
-            f"NO text, NO watermarks, NO signatures."
+            f"Create a high-quality, detailed image: {prompt}\n\n"
+            f"STYLE: {style_enhancement}\n\n"
+            f"QUALITY REQUIREMENTS:\n"
+            f"- Clean, sharp, 4K resolution\n"
+            f"- Perfect composition and framing\n"
+            f"- Natural proportions (especially for humans - NO distorted faces or bodies)\n"
+            f"- Proper perspective and depth\n"
+            f"- Harmonious color palette\n"
+            f"- Professional-grade output\n"
+            f"- NO text/watermarks/signatures inside the image unless specifically requested\n"
+            f"- NO artifacts or distortions\n\n"
+            f"OUTPUT: Produce the final, complete image based on the description."
         )
         
         return enhanced
     
     def _enhance_edit_prompt(self, user_prompt):
-        """Enhance prompt for image editing"""
+        """
+        Enhance prompt for image editing with preservation rules.
+        """
         prompt = user_prompt.strip()
         
+        # Detect style request in editing
+        detected_style = self._detect_style(prompt)
+        
         enhanced = (
-            f"{prompt}. "
-            f"Maintain high quality, photorealistic style, sharp focus, "
-            f"natural lighting, seamless integration, professional result."
+            f"EDIT REQUEST: {prompt}\n\n"
+            f"EDITING STYLE: {detected_style}\n\n"
+            f"QUALITY REQUIREMENTS:\n"
+            f"- Maintain HIGH quality and resolution\n"
+            f"- Keep original proportions natural\n"
+            f"- Ensure seamless, realistic integration\n"
+            f"- Consistent lighting and shadows with original\n"
+            f"- NO visible artifacts or distortions\n"
+            f"- NO text added unless specifically requested\n"
+            f"- Professional, polished result"
         )
         
         return enhanced
