@@ -66,12 +66,191 @@ VIDEO_COOLDOWN_SECONDS = VIDEO_COOLDOWN_HOURS * 3600
 # Database file
 USER_DB_FILE = 'users_database.json'
 
+# Loyalty + promotion configuration
+LOYALTY_POINT_RULES = {
+    'video_creation': 40,
+    'text_video': 45,
+    'image_generation': 18,
+    'image_edit': 15,
+}
+
+LOYALTY_LEVELS = [
+    {'name': 'Bronze', 'min_points': 0, 'emoji': '🥉', 'benefit': 'Boshlangʻich daraja'},
+    {'name': 'Silver', 'min_points': 150, 'emoji': '🥈', 'benefit': '1 ta promo ochiladi'},
+    {'name': 'Gold', 'min_points': 350, 'emoji': '🥇', 'benefit': 'VIP promptlar'},
+    {'name': 'Platinum', 'min_points': 700, 'emoji': '🏆', 'benefit': 'Tezroq promolar'},
+    {'name': 'Diamond', 'min_points': 1200, 'emoji': '💎', 'benefit': 'Cheklovsiz aksiyalar'},
+]
+
+LOYALTY_TIER_ORDER = {tier['name']: idx for idx, tier in enumerate(LOYALTY_LEVELS)}
+
+PROMOTION_CATALOG = [
+    {
+        'id': 'cooldown_skip',
+        'name': '⏭️ Cheklovni oʻtkazib yuborish',
+        'description': "6 soatlik cheklovni 1 martaga bekor qiladi.",
+        'unlock_points': 150,
+        'min_tier': 'Silver',
+        'cooldown_hours': 72,
+        'reward': {'type': 'cooldown_token', 'value': 1}
+    },
+    {
+        'id': 'double_points',
+        'name': '✨ 2x Ball Booster',
+        'description': "Keyingi video uchun ball ikki baravar bo'ladi (24 soat ichida).",
+        'unlock_points': 260,
+        'min_tier': 'Gold',
+        'cooldown_hours': 120,
+        'reward': {'type': 'point_multiplier', 'multiplier': 2.0, 'duration_hours': 24}
+    },
+    {
+        'id': 'vip_prompt_pack',
+        'name': '💎 VIP Prompt Pack',
+        'description': "Eksklyuziv sahna va nutqlarni ochadi.",
+        'unlock_points': 200,
+        'min_tier': 'Silver',
+        'cooldown_hours': 48,
+        'reward': {'type': 'prompt_pack', 'pack_id': 'vip_memories'}
+    },
+    {
+        'id': 'power_speech_pack',
+        'name': '🎙️ Motivatsion Nutq Seti',
+        'description': "Kuchli nutq va liderlik promptlari.",
+        'unlock_points': 420,
+        'min_tier': 'Gold',
+        'cooldown_hours': 72,
+        'reward': {'type': 'prompt_pack', 'pack_id': 'power_speech'}
+    }
+]
+
+LOYALTY_PROMPT_PACKS = {
+    'vip_memories': [
+        {
+            'name': '💎 VIP Xotiralar',
+            'prompt': "CINEMATIC Uzbek heritage portrait IN UZBEK LANGUAGE. Subject looks into camera with teary joyful eyes, whispers heartfelt words about remembering family reunions. Add gentle hand over heart, soft breathing, shimmering bokeh lights. CRITICAL: Uzbek audio delivering 'Oilam mening boyligim... har lahza yodimda' with emotional, premium voice.",
+            'uzbek_text': "Oilam mening boyligim... har lahza yodimda."
+        },
+        {
+            'name': '🏮 Premium Yangi Hayot',
+            'prompt': "High-end studio lighting, restored vintage Uzbek photo. Character smiles subtly then shares an uplifting Uzbek blessing about hope and new beginnings. Include natural lip sync, micro eye shimmer, premium color grading.",
+            'uzbek_text': "Yangi tong bilan umid ham tugʻiladi."
+        },
+        {
+            'name': '🌌 Kino-uslubiy Orzular',
+            'prompt': "Epic slow-motion cinematic scene where the subject tells a poetic Uzbek line about chasing dreams. Windswept hair, soft particles, gentle camera push-in, master-grade color science.",
+            'uzbek_text': "Orzularimni quvib, osmonga poylayman."
+        }
+    ],
+    'power_speech': [
+        {
+            'name': '🔥 Liderning Nutqi',
+            'prompt': "Photorealistic Uzbek leader delivering motivational speech IN UZBEK LANGUAGE. Strong confident gestures, bold tone, spotlight lighting, subtle camera shake. Audio line: 'Jamoamiz gʻalaba uchun tugʻilgan!'.",
+            'uzbek_text': "Jamoamiz gʻalaba uchun tugʻilgan!"
+        },
+        {
+            'name': '⚡ Startap Ruhi',
+            'prompt': "Dynamic entrepreneur vibe, subject leans forward, explains vision with excited Uzbek wording about building future tech. Background neon accents, rhythmic breathing, fast cuts.",
+            'uzbek_text': "Biz texnologiya bilan kelajakni yasayapmiz!"
+        },
+        {
+            'name': '🛡 Qahramon Kayfiyat',
+            'prompt': "Heroic cinematic pose, slow pan, confident expression, Uzbek speech promising to protect loved ones. Include echoing hall ambience and dramatic lighting.",
+            'uzbek_text': "Ayrimlar uchun emas, barchamiz uchun himoya qilaman!"
+        }
+    ]
+}
+
 
 # User Database Manager
 class UserDatabase:
     def __init__(self, db_file):
         self.db_file = db_file
         self.data = self.load_db()
+    
+    def _default_loyalty_state(self):
+        next_points = LOYALTY_LEVELS[1]['min_points'] if len(LOYALTY_LEVELS) > 1 else 0
+        return {
+            'points': 0,
+            'tier': LOYALTY_LEVELS[0]['name'],
+            'tier_emoji': LOYALTY_LEVELS[0]['emoji'],
+            'points_to_next': next_points,
+            'last_point_award': 0,
+            'streak': {'count': 0, 'best': 0, 'day': None},
+            'history': [],
+            'promo_claims': {},
+            'cooldown_tokens': 0,
+            'pending_point_multiplier': 1.0,
+            'pending_multiplier_expiry': None,
+            'unlocked_prompt_packs': [],
+            'bonus_prompts': []
+        }
+    
+    def _ensure_user_schema(self, user_id_str):
+        """Ensure base and loyalty fields exist for a user"""
+        user = self.data.get(user_id_str)
+        if not user or not isinstance(user, dict):
+            user = {
+                'user_id': int(user_id_str),
+                'username': "No_username",
+                'first_name': "Noma'lum",
+                'videos_created': 0,
+                'last_video_time': 0,
+                'join_date': time.time(),
+                'total_requests': 0
+            }
+            self.data[user_id_str] = user
+        
+        if 'loyalty' not in user or not isinstance(user['loyalty'], dict):
+            user['loyalty'] = self._default_loyalty_state()
+        else:
+            defaults = self._default_loyalty_state()
+            for key, value in defaults.items():
+                if key not in user['loyalty']:
+                    if isinstance(value, (dict, list)):
+                        user['loyalty'][key] = json.loads(json.dumps(value))
+                    else:
+                        user['loyalty'][key] = value
+        return user
+    
+    def _update_loyalty_tier(self, loyalty):
+        points = loyalty.get('points', 0)
+        tier_info = LOYALTY_LEVELS[0]
+        for tier in LOYALTY_LEVELS:
+            if points >= tier['min_points']:
+                tier_info = tier
+        loyalty['tier'] = tier_info['name']
+        loyalty['tier_emoji'] = tier_info['emoji']
+        
+        next_points = 0
+        for tier in LOYALTY_LEVELS:
+            if tier['min_points'] > points:
+                next_points = tier['min_points'] - points
+                break
+        loyalty['points_to_next'] = max(0, next_points)
+        return tier_info
+    
+    def _calculate_streak_bonus(self, loyalty, timestamp):
+        current_day = int(timestamp // 86400)
+        streak = loyalty.get('streak', {'count': 0, 'best': 0, 'day': None})
+        last_day = streak.get('day')
+        
+        if last_day == current_day:
+            # already counted today
+            pass
+        elif last_day == current_day - 1:
+            streak['count'] = streak.get('count', 0) + 1
+        else:
+            streak['count'] = 1
+        
+        streak['day'] = current_day
+        streak['best'] = max(streak.get('best', 0), streak['count'])
+        loyalty['streak'] = streak
+        return min(streak['count'] * 2, 20)
+    
+    def _append_loyalty_history(self, loyalty, entry):
+        history = loyalty.get('history', [])
+        history.insert(0, entry)
+        loyalty['history'] = history[:25]
     
     def load_db(self):
         """Load user database from file"""
@@ -108,42 +287,56 @@ class UserDatabase:
                 'join_date': time.time(),
                 'total_requests': 0
             }
+            self._ensure_user_schema(user_id_str)
             self.save_db()
             logger.info(f"✅ New user added - ID: {user_id}, Username: {safe_username}, Name: {safe_first_name}")
     
-    def can_create_video(self, user_id):
+    def can_create_video(self, user_id, consume_loyalty_skip=False):
         """Check if user can create video (6 hour cooldown)"""
         # Admin has no limits
         if user_id in ADMIN_IDS:
             return True, 0
         
         user_id_str = str(user_id)
-        if user_id_str not in self.data:
-            return True, 0
+        user = self._ensure_user_schema(user_id_str)
         
-        last_time = self.data[user_id_str].get('last_video_time', 0)
+        last_time = user.get('last_video_time', 0)
         time_passed = time.time() - last_time
         
         if time_passed >= VIDEO_COOLDOWN_SECONDS:
             return True, 0
         else:
+            loyalty = user.get('loyalty', {})
+            tokens = loyalty.get('cooldown_tokens', 0)
+            if tokens > 0:
+                if consume_loyalty_skip:
+                    loyalty['cooldown_tokens'] = max(0, tokens - 1)
+                    self._append_loyalty_history(loyalty, {
+                        'ts': time.time(),
+                        'reason': 'cooldown_skip',
+                        'points': 0,
+                        'tier': loyalty.get('tier', 'Bronze')
+                    })
+                    self.save_db()
+                return True, 0
             time_left = VIDEO_COOLDOWN_SECONDS - time_passed
             return False, time_left
     
-    def record_video_creation(self, user_id):
+    def record_video_creation(self, user_id, reason='video_creation'):
         """Record that user created a video"""
         user_id_str = str(user_id)
-        if user_id_str in self.data:
-            self.data[user_id_str]['last_video_time'] = time.time()
-            self.data[user_id_str]['videos_created'] += 1
-            self.data[user_id_str]['total_requests'] += 1
-            self.save_db()
+        user = self._ensure_user_schema(user_id_str)
+        user['last_video_time'] = time.time()
+        user['videos_created'] = user.get('videos_created', 0) + 1
+        user['total_requests'] = user.get('total_requests', 0) + 1
+        points = LOYALTY_POINT_RULES.get(reason, LOYALTY_POINT_RULES['video_creation'])
+        return self.add_loyalty_points(user_id, points, reason)
     
     def get_user_stats(self, user_id):
         """Get user statistics"""
         user_id_str = str(user_id)
         if user_id_str in self.data:
-            return self.data[user_id_str]
+            return self._ensure_user_schema(user_id_str)
         return None
     
     def get_all_stats(self):
@@ -157,6 +350,162 @@ class UserDatabase:
             'total_videos': total_videos,
             'active_today': active_today
         }
+    
+    def add_loyalty_points(self, user_id, base_points, reason):
+        """Grant loyalty points and return summary"""
+        base_points = max(1, int(base_points or 1))
+        user = self._ensure_user_schema(str(user_id))
+        loyalty = user['loyalty']
+        now_ts = time.time()
+        
+        # Expire multiplier if needed
+        expiry = loyalty.get('pending_multiplier_expiry')
+        if expiry and now_ts > expiry:
+            loyalty['pending_point_multiplier'] = 1.0
+            loyalty['pending_multiplier_expiry'] = None
+        
+        multiplier = loyalty.get('pending_point_multiplier', 1.0)
+        earned = int(base_points * max(1.0, multiplier))
+        streak_bonus = self._calculate_streak_bonus(loyalty, now_ts)
+        earned_total = max(1, earned + streak_bonus)
+        
+        loyalty['points'] = loyalty.get('points', 0) + earned_total
+        loyalty['last_point_award'] = now_ts
+        tier_info = self._update_loyalty_tier(loyalty)
+        
+        self._append_loyalty_history(loyalty, {
+            'ts': now_ts,
+            'reason': reason,
+            'points': earned_total,
+            'tier': tier_info['name']
+        })
+        
+        if multiplier > 1.0:
+            loyalty['pending_point_multiplier'] = 1.0
+            loyalty['pending_multiplier_expiry'] = None
+        
+        self.save_db()
+        return {
+            'points_added': earned_total,
+            'total_points': loyalty['points'],
+            'tier': loyalty['tier'],
+            'tier_emoji': loyalty.get('tier_emoji', ''),
+            'points_to_next': loyalty.get('points_to_next', 0),
+            'streak': loyalty.get('streak', {}).get('count', 1)
+        }
+    
+    def get_loyalty_profile(self, user_id):
+        user = self._ensure_user_schema(str(user_id))
+        loyalty = user['loyalty']
+        # Refresh tier & multiplier
+        self._update_loyalty_tier(loyalty)
+        now_ts = time.time()
+        expiry = loyalty.get('pending_multiplier_expiry')
+        active_multiplier = loyalty.get('pending_point_multiplier', 1.0)
+        if expiry and now_ts > expiry:
+            loyalty['pending_point_multiplier'] = 1.0
+            loyalty['pending_multiplier_expiry'] = None
+            active_multiplier = 1.0
+            self.save_db()
+        
+        history = loyalty.get('history', [])[:5]
+        
+        return {
+            'tier': loyalty.get('tier', LOYALTY_LEVELS[0]['name']),
+            'tier_emoji': loyalty.get('tier_emoji', LOYALTY_LEVELS[0]['emoji']),
+            'points': loyalty.get('points', 0),
+            'points_to_next': loyalty.get('points_to_next', 0),
+            'cooldown_tokens': loyalty.get('cooldown_tokens', 0),
+            'streak': loyalty.get('streak', {}).get('count', 0),
+            'best_streak': loyalty.get('streak', {}).get('best', 0),
+            'history': history,
+            'multiplier': active_multiplier,
+            'multiplier_expires': loyalty.get('pending_multiplier_expiry'),
+            'available_promotions': len(self.get_available_promotions(user_id)),
+            'prompt_packs': loyalty.get('unlocked_prompt_packs', [])
+        }
+    
+    def get_available_promotions(self, user_id):
+        user = self._ensure_user_schema(str(user_id))
+        loyalty = user['loyalty']
+        available = []
+        now_ts = time.time()
+        tier_name = loyalty.get('tier', LOYALTY_LEVELS[0]['name'])
+        tier_order = LOYALTY_TIER_ORDER.get(tier_name, 0)
+        
+        for promo in PROMOTION_CATALOG:
+            if loyalty.get('points', 0) < promo['unlock_points']:
+                continue
+            if LOYALTY_TIER_ORDER.get(promo['min_tier'], 0) > tier_order:
+                continue
+            claims = loyalty.get('promo_claims', {}).get(promo['id'], {})
+            last_claim = claims.get('last_claim')
+            if last_claim and now_ts - last_claim < promo['cooldown_hours'] * 3600:
+                continue
+            available.append(promo)
+        
+        return available
+    
+    def _apply_promo_reward(self, loyalty, promo, now_ts):
+        reward = promo.get('reward', {})
+        summary = ""
+        if reward.get('type') == 'cooldown_token':
+            value = reward.get('value', 1)
+            loyalty['cooldown_tokens'] = loyalty.get('cooldown_tokens', 0) + value
+            summary = f"+{value} ta cooldown token"
+        elif reward.get('type') == 'point_multiplier':
+            multiplier = reward.get('multiplier', 1.5)
+            duration = reward.get('duration_hours', 24) * 3600
+            loyalty['pending_point_multiplier'] = multiplier
+            loyalty['pending_multiplier_expiry'] = now_ts + duration
+            summary = f"{multiplier}x ball {int(duration/3600)} soat"
+        elif reward.get('type') == 'prompt_pack':
+            pack_id = reward.get('pack_id')
+            if pack_id:
+                packs = loyalty.get('unlocked_prompt_packs', [])
+                if pack_id not in packs:
+                    packs.append(pack_id)
+                    loyalty['unlocked_prompt_packs'] = packs
+                summary = f"{promo['name']} ochildi"
+        return summary
+    
+    def claim_promotion(self, user_id, promo_id):
+        user = self._ensure_user_schema(str(user_id))
+        loyalty = user['loyalty']
+        promo = next((p for p in PROMOTION_CATALOG if p['id'] == promo_id), None)
+        if not promo:
+            return False, "Promo topilmadi."
+        
+        tier_name = loyalty.get('tier', LOYALTY_LEVELS[0]['name'])
+        if loyalty.get('points', 0) < promo['unlock_points']:
+            return False, "Ballar yetarli emas."
+        if LOYALTY_TIER_ORDER.get(tier_name, 0) < LOYALTY_TIER_ORDER.get(promo['min_tier'], 0):
+            return False, f"{promo['min_tier']} darajasidan keyin ochiladi."
+        
+        claims = loyalty.setdefault('promo_claims', {}).setdefault(promo_id, {'last_claim': 0, 'times_claimed': 0})
+        now_ts = time.time()
+        if claims['last_claim'] and now_ts - claims['last_claim'] < promo['cooldown_hours'] * 3600:
+            remaining = promo['cooldown_hours'] - int((now_ts - claims['last_claim']) // 3600)
+            return False, f"Promo {max(1, remaining)} soatdan keyin yana ochiladi."
+        
+        reward_summary = self._apply_promo_reward(loyalty, promo, now_ts)
+        claims['last_claim'] = now_ts
+        claims['times_claimed'] += 1
+        self.save_db()
+        return True, {
+            'promo': promo,
+            'reward_summary': reward_summary,
+            'loyalty': loyalty
+        }
+    
+    def get_loyalty_prompts(self, user_id):
+        user = self._ensure_user_schema(str(user_id))
+        loyalty = user['loyalty']
+        prompts = []
+        for pack_id in loyalty.get('unlocked_prompt_packs', []):
+            prompts.extend(LOYALTY_PROMPT_PACKS.get(pack_id, []))
+        prompts.extend(loyalty.get('bonus_prompts', []))
+        return prompts
 
 
 # Initialize database
@@ -1744,7 +2093,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎨 Rasmni O'zgartir", callback_data="menu_edit_image")
         ],
         [
-            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
+            InlineKeyboardButton("🎁 Mukofotlar", callback_data="loyalty_menu"),
+            InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")
+        ],
+        [
             InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")
         ]
     ]
@@ -1896,7 +2248,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # IMAGE TO VIDEO MODE (default)
     # CHEKLOV TEKSHIRUVI (Admin uchun cheklov yo'q)
-    can_create, time_left = user_db.can_create_video(user.id)
+    can_create, time_left = user_db.can_create_video(user.id, consume_loyalty_skip=True)
     
     logger.info(f"✅ PARALLEL: User {user.id} can_create={can_create}, parallel processing active")
     
@@ -1984,11 +2336,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # CHECK FOR RANDOM VIDEO MODE (from new menu)
         random_video_mode = context.user_data.get('random_video_mode', False)
+        loyalty_prompts = user_db.get_loyalty_prompts(user.id)
+        selected_style = None
+        used_loyalty_prompt = False
+        
+        def try_loyalty_prompt(probability: float):
+            nonlocal selected_style, used_loyalty_prompt
+            if selected_style is None and loyalty_prompts and random.random() < probability:
+                selected_style = random.choice(loyalty_prompts)
+                used_loyalty_prompt = True
+                logger.info(f"💎 LOYALTY PROMPT: User {user.id} - {selected_style['name']}")
         
         if random_video_mode:
-            # TASODIFIY VIDEO MODE - Random prompt tanlash
-            selected_style = get_random_prompt()
-            logger.info(f"🎲 TASODIFIY VIDEO MODE: User {user.id} - {selected_style['name']}")
+            try_loyalty_prompt(0.45)
+            if selected_style is None:
+                # TASODIFIY VIDEO MODE - Random prompt tanlash
+                selected_style = get_random_prompt()
+                logger.info(f"🎲 TASODIFIY VIDEO MODE: User {user.id} - {selected_style['name']}")
             # Clear random_video_mode flag
             context.user_data.pop('random_video_mode', None)
         else:
@@ -1997,20 +2361,31 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             selected_category = context.user_data.get('selected_category', None)
             
             if selected_category:
-                # KATEGORIYA MODE - 5ta random prompt tanlash
-                category_prompts = get_random_category_prompts(selected_category, 5)
-                if category_prompts:
-                    selected_style = random.choice(category_prompts)
-                    logger.info(f"🎭 CATEGORY MODE: User {user.id} - Category: {selected_category}, Prompt: {selected_style['name']}")
-                else:
-                    selected_style = analyzer.generate_uzbek_prompt(analysis)
+                try_loyalty_prompt(0.35)
+                if selected_style is None:
+                    # KATEGORIYA MODE - 5ta random prompt tanlash
+                    category_prompts = get_random_category_prompts(selected_category, 5)
+                    if category_prompts:
+                        selected_style = random.choice(category_prompts)
+                        logger.info(f"🎭 CATEGORY MODE: User {user.id} - Category: {selected_category}, Prompt: {selected_style['name']}")
+                    else:
+                        selected_style = analyzer.generate_uzbek_prompt(analysis)
             elif selected_template == 'comedy':
-                # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
-                selected_style = get_random_prompt()
-                logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
+                try_loyalty_prompt(0.5)
+                if selected_style is None:
+                    # Random prompt tanlash - YANGI COMEDY + ESKI PROMPTS
+                    selected_style = get_random_prompt()
+                    logger.info(f"🎭 COMEDY/RANDOM MODE: User {user.id} - {selected_style['name']}")
             else:
-                # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
-                selected_style = analyzer.generate_uzbek_prompt(analysis)
+                try_loyalty_prompt(0.25)
+                if selected_style is None:
+                    # Rasmga mos o'zbek tilida DINAMIK prompt yaratish
+                    selected_style = analyzer.generate_uzbek_prompt(analysis)
+        
+        if selected_style is None:
+            selected_style = analyzer.generate_uzbek_prompt(analysis)
+        
+        loyalty_hint = "\n💎 VIP prompt faollashdi!" if used_loyalty_prompt else ""
         
         # DEBUG LOG
         logger.info(f"🎭 Selected scenario: {selected_style['name']}")
@@ -2021,7 +2396,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "┏━━━━━━━━━━━━━━━━━━━┓\n"
             "┃ ✅ **TAHLIL TUGADI** ┃\n"
             "┗━━━━━━━━━━━━━━━━━━━┛\n\n"
-            f"🎭 **{selected_style['name']}**\n"
+            f"🎭 **{selected_style['name']}**{loyalty_hint}\n"
             f"🗣️ _{selected_style.get('uzbek_text', '')[:45]}_...\n\n"
             "▰▰▰▰▰▰▰▰▱▱ 80%\n\n"
             "🎬 *Video yaratish boshlandi...*",
@@ -2154,7 +2529,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f.write(video_bytes)
                 
                 # Video yaratishni qayd qilish
-                user_db.record_video_creation(user.id)
+                loyalty_update = user_db.record_video_creation(user.id)
                 
                 # Keyingi video uchun vaqtni hisoblash
                 is_admin = user.id in ADMIN_IDS
@@ -2163,13 +2538,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if not is_admin:
                     next_video_time = f"\n\n⏰ **Keyingi video:** {VIDEO_COOLDOWN_HOURS} soatdan keyin"
                 
+                loyalty_lines = ""
+                if loyalty_update:
+                    loyalty_lines = (
+                        f"\n💎 {loyalty_update.get('tier_emoji', '')} {loyalty_update.get('tier', '')} — "
+                        f"+{loyalty_update.get('points_added', 0)} bal"
+                        f"\n📈 Jami: {loyalty_update.get('total_points', 0)} bal"
+                    )
+                
                 # CHIROYLI CAPTION BOT LINKI BILAN
                 caption = (
                     "╔═══════════════════╗\n"
                     "║ 🎬 **VIDEO TAYYOR!** ║\n"
                     "╚═══════════════════╝\n\n"
                     "✅ *Muvaffaqiyatli yaratildi*"
-                    f"{next_video_time}\n\n"
+                    f"{next_video_time}{loyalty_lines}\n\n"
                     "📸 *Boshqa rasm yuboring!*\n\n"
                     "━━━━━━━━━━━━━━━━━━\n"
                     "🤖 @Jonlantir_Ai_bot\n"
@@ -2678,6 +3061,10 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Ma'lumot topilmadi.")
         return
     
+    loyalty_profile = user_db.get_loyalty_profile(user.id)
+    
+    loyalty_profile = user_db.get_loyalty_profile(user.id)
+    
     # Keyingi video vaqti
     can_create, time_left = user_db.can_create_video(user.id)
     
@@ -2694,6 +3081,15 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         next_video = "\n✅ **Hozir video yarata olasiz!**"
     
+    loyalty_lines = (
+        f"💎 {loyalty_profile.get('tier_emoji', '')} {loyalty_profile.get('tier', '')}\n"
+        f"   Ballar: **{loyalty_profile.get('points', 0)}**\n"
+        f"   Keyingi daraja: {loyalty_profile.get('points_to_next', 0)} bal\n"
+        f"   🎁 Promo tayyor: {loyalty_profile.get('available_promotions', 0)}\n"
+    )
+    if loyalty_profile.get('cooldown_tokens', 0) > 0:
+        loyalty_lines += f"   ⏭️ Bonus token: {loyalty_profile.get('cooldown_tokens')} ta\n"
+    
     stats_text = (
         "┏━━━━━━━━━━━━━━━━━┓\n"
         "┃ 📊 **STATISTIKA** ┃\n"
@@ -2701,6 +3097,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         f"👤 {stats['first_name']}\n"
         f"🏅 {status}\n\n"
+        f"{loyalty_lines}\n"
         
         f"🎬 Videolar: **{stats['videos_created']}**\n"
         f"{next_video}\n\n"
@@ -3172,11 +3569,21 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_menu")]
     ]
     
+    loyalty_lines = (
+        f"💎 {loyalty_profile.get('tier_emoji', '')} {loyalty_profile.get('tier', '')}\n"
+        f"   Ballar: <b>{loyalty_profile.get('points', 0)}</b>\n"
+        f"   Keyingi daraja: {loyalty_profile.get('points_to_next', 0)} bal\n"
+        f"   🎁 Promo tayyor: {loyalty_profile.get('available_promotions', 0)}\n"
+    )
+    if loyalty_profile.get('cooldown_tokens', 0) > 0:
+        loyalty_lines += f"   ⏭️ Bonus token: {loyalty_profile.get('cooldown_tokens')} ta\n"
+    
     stats_text = (
         "📊 <b>STATISTIKA</b>\n\n"
         
         f"👤 {stats['first_name']}\n"
         f"🏅 {status}\n\n"
+        f"{loyalty_lines}\n"
         
         f"🎬 Videolar: <b>{stats['videos_created']}</b>\n"
         f"{next_video}\n\n"
@@ -3187,6 +3594,138 @@ async def my_stats_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await query.edit_message_text(stats_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+# ==========================================
+# 💎 LOYALTY & PROMO MENYU
+# ==========================================
+def build_loyalty_view(user_id: int):
+    profile = user_db.get_loyalty_profile(user_id)
+    available_promos = user_db.get_available_promotions(user_id)
+    
+    tokens_line = f"⏭️ Bonus token: {profile.get('cooldown_tokens', 0)} ta\n" if profile.get('cooldown_tokens') else ""
+    multiplier_line = ""
+    multiplier = profile.get('multiplier', 1)
+    expiry = profile.get('multiplier_expires')
+    if multiplier and multiplier > 1 and expiry:
+        remaining_hours = max(1, int((expiry - time.time()) // 3600))
+        multiplier_line = f"✨ Ball multiplikatori: x{multiplier:.1f} ({remaining_hours} soat)\n"
+    
+    prompt_unlocks = profile.get('prompt_packs', [])
+    prompt_line = ""
+    if prompt_unlocks:
+        readable_names = [pack.replace('_', ' ').title() for pack in prompt_unlocks]
+        prompt_line = "📦 Ochilgan packlar: " + ", ".join(readable_names) + "\n"
+    
+    lines = [
+        "💎 <b>LOYALTY PROGRAM</b>\n",
+        f"{profile.get('tier_emoji', '')} <b>{profile.get('tier', '')}</b> — {profile.get('points', 0)} bal",
+        f"➡️ Keyingi daraja: {profile.get('points_to_next', 0)} bal",
+        tokens_line.strip(),
+        multiplier_line.strip(),
+        prompt_line.strip(),
+        f"🔥 Streak: {profile.get('streak', 0)} kun (eng yaxshi: {profile.get('best_streak', 0)})"
+    ]
+    
+    message = "\n".join(filter(None, lines))
+    
+    if available_promos:
+        message += "\n\n🎁 <b>Mavjud promolar:</b>\n"
+        for promo in available_promos[:3]:
+            message += (
+                f"{promo['name']} — {promo['description']}\n"
+                f"🔓 {promo['unlock_points']} bal | ♻️ {promo['cooldown_hours']} soat\n"
+            )
+    else:
+        message += "\n\n🎁 Hozircha promo tayyor emas. Ko'proq ball to'plang!"
+    
+    keyboard = []
+    for promo in available_promos[:3]:
+        keyboard.append([InlineKeyboardButton(f"🎁 {promo['name']}", callback_data=f"loyalty_claim:{promo['id']}")])
+    
+    keyboard.append([
+        InlineKeyboardButton("📜 Tarix", callback_data="loyalty_history"),
+        InlineKeyboardButton("🔄 Yangilash", callback_data="loyalty_menu")
+    ])
+    keyboard.append([InlineKeyboardButton("◀️ Orqaga", callback_data="back_to_main_menu")])
+    
+    return message, keyboard
+
+
+async def loyalty_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    user_db.add_user(user.id, user.username, user.first_name)
+    
+    if query:
+        await query.answer()
+        message, keyboard = build_loyalty_view(user.id)
+        await query.edit_message_text(
+            text=message,
+            parse_mode='HTML',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+
+async def loyalty_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    profile = user_db.get_loyalty_profile(user.id)
+    history = profile.get('history', [])
+    
+    if not history:
+        history_text = "📜 <b>Loyalty tarixi hozircha bo'sh.</b>"
+    else:
+        history_lines = ["📜 <b>Oxirgi faoliyat</b>\n"]
+        for entry in history[:8]:
+            ts = time.strftime("%d.%m %H:%M", time.localtime(entry.get('ts', time.time())))
+            history_lines.append(
+                f"{ts} • +{entry.get('points', 0)} bal ({entry.get('reason', '-')})"
+            )
+        history_text = "\n".join(history_lines)
+    
+    keyboard = [
+        [InlineKeyboardButton("◀️ Orqaga", callback_data="loyalty_menu")]
+    ]
+    
+    await query.edit_message_text(
+        text=history_text,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def loyalty_claim_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    promo_id = query.data.split(":", 1)[1]
+    
+    success, payload = user_db.claim_promotion(user.id, promo_id)
+    if success:
+        message = f"{payload['promo']['name']} faollashtirildi!\n{payload['reward_summary']}"
+        await query.answer(message, show_alert=True)
+    else:
+        await query.answer(payload, show_alert=True)
+    
+    message, keyboard = build_loyalty_view(user.id)
+    await query.edit_message_text(
+        text=message,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def loyalty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_db.add_user(user.id, user.username, user.first_name)
+    message, keyboard = build_loyalty_view(user.id)
+    await update.message.reply_text(
+        message,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
 # ==========================================
@@ -3385,7 +3924,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         # Check video creation limit
-        can_create, time_left = user_db.can_create_video(user.id)
+        can_create, time_left = user_db.can_create_video(user.id, consume_loyalty_skip=True)
         
         if not can_create:
             hours = int(time_left // 3600)
@@ -3530,7 +4069,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             # Record video creation
-            user_db.record_video_creation(user.id)
+            loyalty_update = user_db.record_video_creation(user.id, reason='text_video')
+            if loyalty_update:
+                await update.message.reply_text(
+                    f"💎 {loyalty_update.get('tier_emoji', '')} {loyalty_update.get('tier', '')} — "
+                    f"+{loyalty_update.get('points_added', 0)} bal\n"
+                    f"📈 Jami: {loyalty_update.get('total_points', 0)} bal",
+                    parse_mode='Markdown'
+                )
             
             await wait_msg.delete()
             context.user_data.pop('waiting_for', None)
@@ -3579,6 +4125,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if result and result.get('success') and 'image_bytes' in result:
                 image_bytes = result['image_bytes']
                 
+                loyalty_bonus = user_db.add_loyalty_points(
+                    user.id,
+                    LOYALTY_POINT_RULES.get('image_generation'),
+                    reason='image_generation'
+                )
+                loyalty_caption = ""
+                if loyalty_bonus:
+                    loyalty_caption = (
+                        f"\n💎 {loyalty_bonus.get('tier_emoji', '')} {loyalty_bonus.get('tier', '')} — "
+                        f"+{loyalty_bonus.get('points_added', 0)} bal"
+                        f"\n📈 Jami: {loyalty_bonus.get('total_points', 0)} bal"
+                    )
+                
                 # Send image with detailed caption
                 await update.message.reply_photo(
                     photo=image_bytes,
@@ -3589,7 +4148,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "• 4K resolution\n"
                         "• Tabiiy proporsiyalar\n"
                         "• Professional chiqish\n\n"
-                        "🤖 Google Gemini 2.0\n\n"
+                        f"🤖 Google Gemini 2.0{loyalty_caption}\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
                         "━━━━━━━━━━━━━━━━━━"
@@ -3670,6 +4229,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if result and result.get('success') and 'image_bytes' in result:
                 edited_bytes = result['image_bytes']
                 
+                loyalty_bonus = user_db.add_loyalty_points(
+                    user.id,
+                    LOYALTY_POINT_RULES.get('image_edit'),
+                    reason='image_edit'
+                )
+                loyalty_caption = ""
+                if loyalty_bonus:
+                    loyalty_caption = (
+                        f"\n💎 {loyalty_bonus.get('tier_emoji', '')} {loyalty_bonus.get('tier', '')} — "
+                        f"+{loyalty_bonus.get('points_added', 0)} bal"
+                        f"\n📈 Jami: {loyalty_bonus.get('total_points', 0)} bal"
+                    )
+                
                 # Send edited image with detailed caption
                 await update.message.reply_photo(
                     photo=edited_bytes,
@@ -3681,7 +4253,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "• Tabiiy proporsiyalar ✓\n"
                         "• Yorug'lik va soyalar ✓\n"
                         "• Sifatsiz tahrirlash ✓\n\n"
-                        "🤖 Google Gemini 2.0\n\n"
+                        f"🤖 Google Gemini 2.0{loyalty_caption}\n\n"
                         "━━━━━━━━━━━━━━━━━━\n"
                         "🤖 @Jonlantir_Ai_bot\n"
                         "━━━━━━━━━━━━━━━━━━"
@@ -3974,8 +4546,9 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🎬 Video Yaratish", callback_data="menu_video_creation")],
         [InlineKeyboardButton("✍️ Matn → Rasm", callback_data="menu_text_to_image"),
          InlineKeyboardButton("🎨 Rasmni O'zgartir", callback_data="menu_edit_image")],
-        [InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button"),
-         InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")]
+        [InlineKeyboardButton("🎁 Mukofotlar", callback_data="loyalty_menu"),
+         InlineKeyboardButton("📊 Statistika", callback_data="my_stats_button")],
+        [InlineKeyboardButton("ℹ️ Yordam", callback_data="help_menu")]
     ]
     
     if is_admin:
@@ -4350,6 +4923,7 @@ def main():
         application.add_handler(CommandHandler("scenarios", scenarios_command))
         application.add_handler(CommandHandler("admin", admin_panel))
         application.add_handler(CommandHandler("stats", my_stats))
+        application.add_handler(CommandHandler("loyalty", loyalty_command))
         
         # ASOSIY MENYU CALLBACKS - YANGI!
         # New video creation menu handlers
@@ -4390,6 +4964,9 @@ def main():
         application.add_handler(CallbackQueryHandler(help_menu, pattern="^help_menu$"))
         application.add_handler(CallbackQueryHandler(help_how, pattern="^help_how$"))
         application.add_handler(CallbackQueryHandler(help_admin, pattern="^help_admin$"))
+        application.add_handler(CallbackQueryHandler(loyalty_menu, pattern="^loyalty_menu$"))
+        application.add_handler(CallbackQueryHandler(loyalty_history, pattern="^loyalty_history$"))
+        application.add_handler(CallbackQueryHandler(loyalty_claim_promo, pattern="^loyalty_claim:"))
         
         application.add_handler(CallbackQueryHandler(my_stats_button, pattern="^my_stats_button$"))
         application.add_handler(CallbackQueryHandler(create_video, pattern="^create_video$"))
